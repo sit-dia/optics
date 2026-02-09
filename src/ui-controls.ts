@@ -21,6 +21,8 @@ export class BasePanel {
   protected ctx: CanvasRenderingContext2D;
   protected controlsEl: HTMLElement;
   protected readoutsEl: HTMLElement;
+  protected width = 0;
+  protected height = 0;
   private resizeObserver: ResizeObserver;
   private rafId: number | null = null;
 
@@ -55,6 +57,8 @@ export class BasePanel {
     this.canvas.height = Math.floor(rect.height * scale);
     this.canvas.style.width = `${rect.width}px`;
     this.canvas.style.height = `${rect.height}px`;
+    this.width = rect.width;
+    this.height = rect.height;
     this.ctx.setTransform(scale, 0, 0, scale, 0, 0);
     this.requestDraw();
   }
@@ -123,13 +127,12 @@ export class BasePanel {
   }
 
   protected clear(): void {
-    const { width, height } = this.canvas;
-    this.ctx.clearRect(0, 0, width, height);
+    this.ctx.clearRect(0, 0, this.width, this.height);
   }
 
   render(): void {
     this.clear();
-    const { width, height } = this.canvas;
+    const { width, height } = this;
     this.ctx.fillStyle = '#101424';
     this.ctx.fillRect(0, 0, width, height);
     this.ctx.fillStyle = '#eaeaea';
