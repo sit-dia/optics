@@ -16,6 +16,8 @@ const panelMap = new Map<string, (container: HTMLElement) => void>([
   ['vac', (container) => new VacPanel(container)],
 ]);
 
+const PANEL_IDS = ['thin-lens', 'light-path', 'params', 'frustum', 'distortion', 'vac'];
+
 function initPanels(): void {
   document.querySelectorAll<HTMLElement>('[data-panel]').forEach((panel) => {
     const key = panel.dataset.panel;
@@ -35,7 +37,40 @@ function scrollToHash(): void {
   }
 }
 
+/** Scroll-spy: highlight sidebar + header nav links for visible panel */
+function initScrollSpy(): void {
+  const sidebarLinks = document.querySelectorAll<HTMLAnchorElement>('.sidebar-nav a');
+  const headerLinks = document.querySelectorAll<HTMLAnchorElement>('.site-nav a[href^="#"]');
+
+  const setActive = (id: string) => {
+    sidebarLinks.forEach((a) => {
+      a.classList.toggle('active', a.getAttribute('data-sidebar') === id);
+    });
+    headerLinks.forEach((a) => {
+      const href = a.getAttribute('href');
+      a.classList.toggle('active', href === `#${id}`);
+    });
+  };
+
+  const observer = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          setActive(entry.target.id);
+        }
+      }
+    },
+    { rootMargin: '-20% 0px -60% 0px', threshold: 0 },
+  );
+
+  PANEL_IDS.forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) observer.observe(el);
+  });
+}
+
 window.addEventListener('hashchange', scrollToHash);
 
 initPanels();
+initScrollSpy();
 setTimeout(scrollToHash, 50);
