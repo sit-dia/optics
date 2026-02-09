@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VR Optics Explorer</title>
+    <meta
+      name="description"
+      content="Interactive VR optics explorer for DIA at SIT"
+    />
+    <script type="module" crossorigin src="./assets/index-CV38snAU.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-CFaj2OnK.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="brand">
+        <div class="brand-title">VR Optics Explorer</div>
+        <div class="brand-badge">DIA @ SIT</div>
+      </div>
+      <nav class="site-nav">
+        <a href="#thin-lens">Thin Lens</a>
+        <a href="#light-path">Light Path</a>
+        <a href="#params">Parameters</a>
+        <a href="#frustum">Frustum</a>
+        <a href="#distortion">Distortion</a>
+        <a href="#vac">VAC</a>
+        <a
+          class="external-link"
+          href="https://hmd.diaversity.org"
+          target="_blank"
+          rel="noreferrer"
+          >See in 3D</a
+        >
+      </nav>
+    </header>
+
+    <main class="page" id="app">
+      <section class="panel" id="thin-lens" data-panel="thin-lens">
+        <header class="panel-header">
+          <h2>Thin Lens Equation</h2>
+          <p>Explore real vs virtual images with principal rays.</p>
+        </header>
+        <div class="panel-body">
+          <div class="panel-canvas" data-canvas></div>
+          <div class="panel-controls" data-controls></div>
+          <div class="panel-readouts" data-readouts></div>
+        </div>
+      </section>
+
+      <section class="panel" id="light-path" data-panel="light-path">
+        <header class="panel-header">
+          <h2>Projection vs HMD</h2>
+          <p>Compare real image projection with HMD virtual images.</p>
+        </header>
+        <div class="panel-body">
+          <div class="panel-canvas" data-canvas></div>
+          <div class="panel-controls" data-controls></div>
+          <div class="panel-readouts" data-readouts></div>
+        </div>
+      </section>
+
+      <section class="panel" id="params" data-panel="params">
+        <header class="panel-header">
+          <h2>Key HMD Parameters</h2>
+          <p>IPD, eye relief, focal length, and FOV relationships.</p>
+        </header>
+        <div class="panel-body">
+          <div class="panel-canvas" data-canvas></div>
+          <div class="panel-controls" data-controls></div>
+          <div class="panel-readouts" data-readouts></div>
+        </div>
+      </section>
+
+      <section class="panel" id="frustum" data-panel="frustum">
+        <header class="panel-header">
+          <h2>View Frustum</h2>
+          <p>Understand off-axis projection and binocular overlap.</p>
+        </header>
+        <div class="panel-body">
+          <div class="panel-canvas" data-canvas></div>
+          <div class="panel-controls" data-controls></div>
+          <div class="panel-readouts" data-readouts></div>
+        </div>
+      </section>
+
+      <section class="panel" id="distortion" data-panel="distortion">
+        <header class="panel-header">
+          <h2>Lens Distortion</h2>
+          <p>Visualize barrel and pincushion correction.</p>
+        </header>
+        <div class="panel-body">
+          <div class="panel-canvas" data-canvas></div>
+          <div class="panel-controls" data-controls></div>
+          <div class="panel-readouts" data-readouts></div>
+        </div>
+      </section>
+
+      <section class="panel" id="vac" data-panel="vac">
+        <header class="panel-header">
+          <h2>Vergence-Accommodation</h2>
+          <p>Compare natural vision to VR mismatch.</p>
+        </header>
+        <div class="panel-body">
+          <div class="panel-canvas" data-canvas></div>
+          <div class="panel-controls" data-controls></div>
+          <div class="panel-readouts" data-readouts></div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <span>Optics Explorer for DIA @ SIT.</span>
+      <a href="https://hmd.diaversity.org" target="_blank" rel="noreferrer"
+        >HMD Simulator</a
+      >
+    </footer>
+  </body>
+</html>

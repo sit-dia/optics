@@ -25,6 +25,7 @@ export class BasePanel {
   protected height = 0;
   private resizeObserver: ResizeObserver;
   private rafId: number | null = null;
+  private resizeTimer: number | null = null;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -44,9 +45,19 @@ export class BasePanel {
       throw new Error('Canvas context unavailable');
     }
     this.ctx = ctx;
-    this.resizeObserver = new ResizeObserver(() => this.resize());
+    this.resizeObserver = new ResizeObserver(() => this.scheduleResize());
     this.resizeObserver.observe(canvasHost);
     this.resize();
+  }
+
+  private scheduleResize(): void {
+    if (this.resizeTimer !== null) {
+      window.clearTimeout(this.resizeTimer);
+    }
+    this.resizeTimer = window.setTimeout(() => {
+      this.resizeTimer = null;
+      this.resize();
+    }, 120);
   }
 
   protected resize(): void {
@@ -144,5 +155,9 @@ export class BasePanel {
 
   dispose(): void {
     this.resizeObserver.disconnect();
+    if (this.resizeTimer !== null) {
+      window.clearTimeout(this.resizeTimer);
+      this.resizeTimer = null;
+    }
   }
 }
