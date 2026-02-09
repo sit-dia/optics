@@ -1,0 +1,26 @@
+.panel-canvas canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.panel-body {
+  grid-template-rows: minmax(240px, 1fr) auto auto;
+}
+
+.panel-controls {
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.panel-readouts {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.callout {
+  background: rgba(233, 69, 96, 0.15);
+  border: 1px solid rgba(233, 69, 96, 0.5);
+  color: #ffd6dd;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 0.8rem;
+}
