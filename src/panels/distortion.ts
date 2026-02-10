@@ -39,8 +39,11 @@ export class DistortionPanel extends BasePanel {
     const toggleRow = document.createElement('div');
     toggleRow.className = 'control-row';
     const toggleLabel = document.createElement('label');
+    toggleLabel.htmlFor = 'distortion-pre-toggle';
     toggleLabel.textContent = 'Pre-correction';
     this.preToggle = document.createElement('input');
+    this.preToggle.id = 'distortion-pre-toggle';
+    this.preToggle.name = 'distortion-pre-toggle';
     this.preToggle.type = 'checkbox';
     this.preToggle.checked = false;
     this.preToggle.addEventListener('change', () => this.requestDraw());

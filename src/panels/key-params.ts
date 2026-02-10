@@ -62,8 +62,11 @@ export class KeyParamsPanel extends BasePanel {
     const toggleRow = document.createElement('div');
     toggleRow.className = 'control-row';
     const toggleLabel = document.createElement('label');
+    toggleLabel.htmlFor = 'params-fov-toggle';
     toggleLabel.textContent = 'Show FOV breakdown';
     this.fovToggle = document.createElement('input');
+    this.fovToggle.id = 'params-fov-toggle';
+    this.fovToggle.name = 'params-fov-toggle';
     this.fovToggle.type = 'checkbox';
     this.fovToggle.checked = true;
     this.fovToggle.addEventListener('change', () => this.requestDraw());

@@ -126,6 +126,7 @@ a {
   gap: 16px;
   margin-top: 18px;
   flex: 1;
+  min-height: 0;
 }
 
 .panel-canvas {
@@ -134,6 +135,8 @@ a {
   border: 1px solid rgba(255, 255, 255, 0.08);
   padding: 12px;
   min-height: 260px;
+  position: relative;
+  overflow: hidden;
 }
 
 .panel-controls,
