@@ -17,12 +17,23 @@
   box-sizing: border-box;
 }
 
+html {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
 body {
   margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
   background: radial-gradient(circle at top, #222341 0%, #151627 55%, #11121d 100%);
   color: var(--text);
   font-family: var(--font-body);
-  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 a {
@@ -38,6 +49,7 @@ a {
   align-items: center;
   justify-content: space-between;
   height: var(--header-height);
+  flex-shrink: 0;
   padding: 0 28px;
   background: rgba(18, 21, 40, 0.92);
   backdrop-filter: blur(12px);
@@ -96,6 +108,11 @@ a {
   padding: 32px 28px 60px;
   max-width: 1400px;
   margin: 0 auto;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  width: 100%;
 }
 
 .panel {
@@ -106,7 +123,9 @@ a {
   padding: 20px 20px 24px;
   display: flex;
   flex-direction: column;
-  min-height: 480px;
+  min-height: 0;
+  max-height: 680px;
+  overflow: hidden;
 }
 
 .panel-header h2 {
@@ -127,14 +146,15 @@ a {
   margin-top: 18px;
   flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
 
 .panel-canvas {
   background: rgba(10, 12, 24, 0.7);
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 12px;
-  min-height: 260px;
+  padding: 0;
+  min-height: 240px;
   position: relative;
   overflow: hidden;
 }
@@ -143,6 +163,8 @@ a {
 .panel-readouts {
   display: grid;
   gap: 12px;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .control-row {
@@ -210,6 +232,7 @@ a {
   text-align: center;
   color: var(--text-dim);
   font-size: 0.8rem;
+  grid-column: 1 / -1;
 }
 
 .site-footer a {
@@ -286,6 +309,10 @@ a {
     grid-template-columns: 1fr;
   }
 
+  .panel {
+    max-height: none;
+  }
+
   .site-header {
     flex-direction: column;
     height: auto;
@@ -310,5 +337,6 @@ a {
 
   .panel {
     min-height: auto;
+    max-height: none;
   }
 }

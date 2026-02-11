@@ -63,21 +63,15 @@ export class BasePanel {
   protected resize(): void {
     const host = this.canvas.parentElement;
     if (!host) return;
-    const styles = window.getComputedStyle(host);
-    const paddingX =
-      Number.parseFloat(styles.paddingLeft) + Number.parseFloat(styles.paddingRight);
-    const paddingY =
-      Number.parseFloat(styles.paddingTop) + Number.parseFloat(styles.paddingBottom);
-    const contentWidth = Math.max(0, host.clientWidth - paddingX);
-    const contentHeight = Math.max(0, host.clientHeight - paddingY);
+    const rect = host.getBoundingClientRect();
+    const contentWidth = Math.max(0, Math.floor(rect.width));
+    const contentHeight = Math.max(0, Math.floor(rect.height));
     if (contentWidth === this.width && contentHeight === this.height) {
       return;
     }
     const scale = window.devicePixelRatio || 1;
     this.canvas.width = Math.floor(contentWidth * scale);
     this.canvas.height = Math.floor(contentHeight * scale);
-    this.canvas.style.width = `${contentWidth}px`;
-    this.canvas.style.height = `${contentHeight}px`;
     this.width = contentWidth;
     this.height = contentHeight;
     this.ctx.setTransform(scale, 0, 0, scale, 0, 0);
