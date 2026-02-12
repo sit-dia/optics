@@ -238,16 +238,16 @@ export class ThinLensPanel extends BasePanel {
         });
       }
       const imgLabelText = imgType === 'virtual' ? 'Virtual Image' : 'Real Image';
-      // Nudge image label left when it would overlap the Eye label
+      // Nudge image label when it would overlap the Eye label
       const eyeCanvasX = worldToCanvas(eyeWorldX, 0).x;
-      const imgLabelX = Math.abs(imageTip.x - eyeCanvasX) < 50
-        ? imageTip.x - 40
-        : imageTip.x;
+      const tooCloseToEye = Math.abs(imageTip.x - eyeCanvasX) < 60;
+      const imgLabelX = tooCloseToEye ? imageTip.x - 50 : imageTip.x;
+      const imgLabelY = tooCloseToEye ? imageTip.y + 16 : imageTip.y - 16;
       drawLabel(
         ctx,
         imgLabelText,
         imgLabelX,
-        imageTip.y - 16,
+        imgLabelY,
         {
           background:
             imgType === 'virtual'
