@@ -331,7 +331,7 @@ export class ThinLensPanel extends BasePanel {
     // Projector: eye looks right toward real image; HMD: eye looks left into lens
     const eyePos = worldToCanvas(eyeWorldX, 0);
     const eyeRotation = doDistance < f ? Math.PI : 0;
-    drawEye(ctx, eyePos.x, eyePos.y, 18, eyeRotation);
+    drawEye(ctx, eyePos.x, eyePos.y, 14, eyeRotation);
     drawLabel(ctx, 'Eye', eyePos.x, eyePos.y - 22, {
       color: COLORS.text,
       background: 'rgba(255,255,255,0.08)',
