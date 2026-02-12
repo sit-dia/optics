@@ -159,23 +159,35 @@ export class ThinLensPanel extends BasePanel {
     // --- Lens ---
     drawLens(ctx, lensPos.x, lensPos.y, 140, { color: COLORS.lens });
 
-    // --- Focal points ---
+    // --- Focal points: solid tick marks + small italic labels ---
     const focalLeft = worldToCanvas(-f, 0);
     const focalRight = worldToCanvas(f, 0);
-    drawLabel(ctx, 'F', focalLeft.x, focalLeft.y - 16, { color: COLORS.text });
-    drawLabel(ctx, "F'", focalRight.x, focalRight.y - 16, { color: COLORS.text });
-    drawDashedLine(ctx, focalLeft.x, focalLeft.y - 6, focalLeft.x, focalLeft.y + 6, {
-      color: COLORS.axis,
-      dash: [3, 4],
+    const focalTickHalf = 10;
+    const focalFont = 'italic 11px "Space Grotesk", system-ui, sans-serif';
+    // Solid tick marks
+    ctx.save();
+    ctx.strokeStyle = COLORS.lens;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(focalLeft.x, focalLeft.y - focalTickHalf);
+    ctx.lineTo(focalLeft.x, focalLeft.y + focalTickHalf);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(focalRight.x, focalRight.y - focalTickHalf);
+    ctx.lineTo(focalRight.x, focalRight.y + focalTickHalf);
+    ctx.stroke();
+    ctx.restore();
+    // Labels
+    drawLabel(ctx, 'f', focalLeft.x, focalLeft.y - focalTickHalf - 10, {
+      color: COLORS.lens,
+      font: focalFont,
+      background: 'rgba(0,0,0,0.5)',
     });
-    drawDashedLine(
-      ctx,
-      focalRight.x,
-      focalRight.y - 6,
-      focalRight.x,
-      focalRight.y + 6,
-      { color: COLORS.axis, dash: [3, 4] }
-    );
+    drawLabel(ctx, "f\u2032", focalRight.x, focalRight.y - focalTickHalf - 10, {
+      color: COLORS.lens,
+      font: focalFont,
+      background: 'rgba(0,0,0,0.5)',
+    });
 
     // --- Display rectangle at object position ---
     const displayTop = worldToCanvas(-doDistance, displayHalfH);
