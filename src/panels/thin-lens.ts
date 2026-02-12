@@ -177,13 +177,13 @@ export class ThinLensPanel extends BasePanel {
     ctx.lineTo(focalRight.x, focalRight.y + focalTickHalf);
     ctx.stroke();
     ctx.restore();
-    // Labels
-    drawLabel(ctx, 'f', focalLeft.x, focalLeft.y - focalTickHalf - 10, {
+    // Labels below axis to avoid clashing with Display/PROJECTOR labels above
+    drawLabel(ctx, 'f', focalLeft.x, focalLeft.y + focalTickHalf + 12, {
       color: COLORS.lens,
       font: focalFont,
       background: 'rgba(0,0,0,0.5)',
     });
-    drawLabel(ctx, "f\u2032", focalRight.x, focalRight.y - focalTickHalf - 10, {
+    drawLabel(ctx, "f\u2032", focalRight.x, focalRight.y + focalTickHalf + 12, {
       color: COLORS.lens,
       font: focalFont,
       background: 'rgba(0,0,0,0.5)',
@@ -194,7 +194,7 @@ export class ThinLensPanel extends BasePanel {
     const displayBot = worldToCanvas(-doDistance, -displayHalfH);
     const dispW = 6;
     drawDisplay(ctx, displayTop.x - dispW / 2, displayTop.y, dispW, displayBot.y - displayTop.y);
-    drawLabel(ctx, 'Display', displayTop.x, displayTop.y - 14, {
+    drawLabel(ctx, 'Display', displayTop.x, displayTop.y - 16, {
       background: 'rgba(179, 157, 219, 0.25)',
     });
 
@@ -237,10 +237,16 @@ export class ThinLensPanel extends BasePanel {
           width: 2.5,
         });
       }
+      const imgLabelText = imgType === 'virtual' ? 'Virtual Image' : 'Real Image';
+      // Nudge image label left when it would overlap the Eye label
+      const eyeCanvasX = worldToCanvas(eyeWorldX, 0).x;
+      const imgLabelX = Math.abs(imageTip.x - eyeCanvasX) < 50
+        ? imageTip.x - 40
+        : imageTip.x;
       drawLabel(
         ctx,
-        imgType === 'virtual' ? 'Virtual Image' : 'Real Image',
-        imageTip.x,
+        imgLabelText,
+        imgLabelX,
         imageTip.y - 16,
         {
           background:
@@ -344,7 +350,7 @@ export class ThinLensPanel extends BasePanel {
     const eyePos = worldToCanvas(eyeWorldX, 0);
     const eyeRotation = doDistance < f ? Math.PI : 0;
     drawEye(ctx, eyePos.x, eyePos.y, 14, eyeRotation);
-    drawLabel(ctx, 'Eye', eyePos.x, eyePos.y - 22, {
+    drawLabel(ctx, 'Eye', eyePos.x, eyePos.y - 26, {
       color: COLORS.text,
       background: 'rgba(255,255,255,0.08)',
     });
@@ -356,7 +362,7 @@ export class ThinLensPanel extends BasePanel {
         : doDistance < f
           ? 'HMD regime: d_o < f → virtual image'
           : 'Projector regime: d_o > f → real image';
-    drawLabel(ctx, regimeLabel, lensPos.x, lensPos.y + 90, {
+    drawLabel(ctx, regimeLabel, lensPos.x, lensPos.y + 70, {
       background:
         doDistance < f
           ? 'rgba(233, 69, 96, 0.2)'
