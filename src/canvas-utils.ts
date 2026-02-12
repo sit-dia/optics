@@ -43,23 +43,22 @@ export function drawLens(
   opts: LensOpts = {}
 ): void {
   const { color = '#ffd700', width = 2 } = opts;
+  const h = height / 2;
+  const bulge = height * 0.12; // how far each arc bulges outward
   ctx.save();
+  // Filled biconvex lens shape
+  ctx.fillStyle = 'rgba(255, 215, 0, 0.08)';
   ctx.strokeStyle = color;
   ctx.lineWidth = width;
   ctx.beginPath();
-  ctx.moveTo(cx, cy - height / 2);
-  ctx.lineTo(cx, cy + height / 2);
+  // Right arc (bulges right)
+  ctx.moveTo(cx, cy - h);
+  ctx.quadraticCurveTo(cx + bulge, cy, cx, cy + h);
+  // Left arc (bulges left) back to top
+  ctx.quadraticCurveTo(cx - bulge, cy, cx, cy - h);
+  ctx.closePath();
+  ctx.fill();
   ctx.stroke();
-  drawArrow(ctx, cx, cy - height / 2, cx, cy - height / 2 - 12, {
-    color,
-    width,
-    headSize: 6,
-  });
-  drawArrow(ctx, cx, cy + height / 2, cx, cy + height / 2 + 12, {
-    color,
-    width,
-    headSize: 6,
-  });
   ctx.restore();
 }
 
@@ -116,18 +115,38 @@ export function drawEye(
   radius: number,
   rotation = 0
 ): void {
+  // Side-view eyeball: circle + cornea bump showing gaze direction
+  // rotation=0 → looking right, rotation=Math.PI → looking left
+  const r = radius;
   ctx.save();
   ctx.translate(cx, cy);
   ctx.rotate(rotation);
+
+  // Eyeball (circle)
   ctx.strokeStyle = '#eaeaea';
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 1.5;
+  ctx.fillStyle = 'rgba(234,234,234,0.05)';
   ctx.beginPath();
-  ctx.arc(0, 0, radius, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.fillStyle = '#11121d';
-  ctx.beginPath();
-  ctx.arc(radius * 0.2, 0, radius * 0.35, 0, Math.PI * 2);
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
   ctx.fill();
+  ctx.stroke();
+
+  // Cornea bump (on the right = gaze direction)
+  ctx.fillStyle = 'rgba(234,234,234,0.12)';
+  ctx.beginPath();
+  ctx.moveTo(r * 0.7, -r * 0.55);
+  ctx.quadraticCurveTo(r * 1.45, 0, r * 0.7, r * 0.55);
+  ctx.arc(0, 0, r, Math.asin(0.55), -Math.asin(0.55), true);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // Pupil (small filled circle offset toward gaze)
+  ctx.fillStyle = '#eaeaea';
+  ctx.beginPath();
+  ctx.arc(r * 0.75, 0, r * 0.18, 0, Math.PI * 2);
+  ctx.fill();
+
   ctx.restore();
 }
 
@@ -249,6 +268,82 @@ export function drawGrid(
     }
     ctx.stroke();
   }
+  ctx.restore();
+}
+
+export function drawProjector(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  widthLeft: number,
+  widthRight: number,
+  length: number
+): void {
+  const backR = 8;
+  ctx.save();
+  ctx.fillStyle = 'rgba(77,166,255,0.06)';
+  ctx.strokeStyle = 'rgba(77,166,255,0.5)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  // Top-left corner (rounded back of projector)
+  ctx.moveTo(x + backR, y - widthLeft / 2);
+  // Top edge slanting inward toward lens
+  ctx.lineTo(x + length, y - widthRight / 2);
+  // Right (lens) side — straight vertical
+  ctx.lineTo(x + length, y + widthRight / 2);
+  // Bottom edge slanting outward
+  ctx.lineTo(x + backR, y + widthLeft / 2);
+  // Rounded back
+  ctx.arcTo(x, y + widthLeft / 2, x, y + widthLeft / 2 - backR, backR);
+  ctx.lineTo(x, y - widthLeft / 2 + backR);
+  ctx.arcTo(x, y - widthLeft / 2, x + backR, y - widthLeft / 2, backR);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+}
+
+export function drawHMD(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number
+): void {
+  // Side-profile HMD: boxy shape
+  // Left side convex (bulges out where optics/display sit)
+  // Right side concave (curves inward to fit the face)
+  const r = 10; // corner radius
+  const convex = width * 0.12; // left-side convex bulge
+  const concave = width * 0.10; // right-side concave indent
+  const cy = y + height / 2;
+
+  ctx.save();
+  ctx.fillStyle = 'rgba(233,69,96,0.05)';
+  ctx.strokeStyle = 'rgba(233,69,96,0.4)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  // Top-left corner (rounded)
+  ctx.moveTo(x + r, y);
+  // Top edge
+  ctx.lineTo(x + width - r, y);
+  // Top-right corner (rounded)
+  ctx.arcTo(x + width, y, x + width, y + r, r);
+  // Right side — concave inward (face-fitting)
+  ctx.quadraticCurveTo(x + width - concave, cy, x + width, y + height - r);
+  // Bottom-right corner (rounded)
+  ctx.arcTo(x + width, y + height, x + width - r, y + height, r);
+  // Bottom edge
+  ctx.lineTo(x + r, y + height);
+  // Bottom-left corner (rounded)
+  ctx.arcTo(x, y + height, x, y + height - r, r);
+  // Left side — convex outward (optics housing bulge)
+  ctx.quadraticCurveTo(x - convex, cy, x, y + r);
+  // Top-left corner close
+  ctx.arcTo(x, y, x + r, y, r);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
   ctx.restore();
 }
 

@@ -3,113 +3,33 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" href="data:," />
+    <link rel="icon" href="./diaversity-logo.png" />
     <title>VR Optics Explorer</title>
     <meta
       name="description"
       content="Interactive VR optics explorer for DIA at SIT"
     />
-    <script type="module" crossorigin src="./assets/index-6_ZktFaK.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-B0J62XiM.css">
+    <script type="module" crossorigin src="./assets/index-DjjYrAJQ.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-35BJlZYc.css">
   </head>
   <body>
+    <div class="dia-brand">DIAversity</div>
+
     <header class="site-header">
-      <div class="brand">
-        <div class="brand-title">VR Optics Explorer</div>
-        <div class="brand-badge">DIA @ SIT</div>
-      </div>
       <nav class="site-nav">
-        <a href="#thin-lens">Thin Lens</a>
-        <a href="#light-path">Light Path</a>
-        <a href="#params">Parameters</a>
-        <a href="#frustum">Frustum</a>
-        <a href="#distortion">Distortion</a>
-        <a href="#vac">VAC</a>
         <a
           class="external-link"
           href="https://hmd.diaversity.org"
           target="_blank"
           rel="noreferrer"
-          >See in 3D</a
+          >See HMD Simulator</a
         >
       </nav>
     </header>
 
-    <aside class="sidebar-nav" id="sidebar-nav">
-      <a href="#thin-lens" data-sidebar="thin-lens"><span class="sidebar-num">1</span><span class="sidebar-label">Thin Lens</span></a>
-      <a href="#light-path" data-sidebar="light-path"><span class="sidebar-num">2</span><span class="sidebar-label">Light Path</span></a>
-      <a href="#params" data-sidebar="params"><span class="sidebar-num">3</span><span class="sidebar-label">Parameters</span></a>
-      <a href="#frustum" data-sidebar="frustum"><span class="sidebar-num">4</span><span class="sidebar-label">Frustum</span></a>
-      <a href="#distortion" data-sidebar="distortion"><span class="sidebar-num">5</span><span class="sidebar-label">Distortion</span></a>
-      <a href="#vac" data-sidebar="vac"><span class="sidebar-num">6</span><span class="sidebar-label">VAC</span></a>
-    </aside>
-
     <main class="page" id="app">
       <section class="panel" id="thin-lens" data-panel="thin-lens">
-        <header class="panel-header">
-          <h2>Thin Lens Equation</h2>
-          <p>Explore real vs virtual images with principal rays.</p>
-        </header>
-        <div class="panel-body">
-          <div class="panel-canvas" data-canvas></div>
-          <div class="panel-controls" data-controls></div>
-          <div class="panel-readouts" data-readouts></div>
-        </div>
-      </section>
-
-      <section class="panel" id="light-path" data-panel="light-path">
-        <header class="panel-header">
-          <h2>Projection vs HMD</h2>
-          <p>Compare real image projection with HMD virtual images.</p>
-        </header>
-        <div class="panel-body">
-          <div class="panel-canvas" data-canvas></div>
-          <div class="panel-controls" data-controls></div>
-          <div class="panel-readouts" data-readouts></div>
-        </div>
-      </section>
-
-      <section class="panel" id="params" data-panel="params">
-        <header class="panel-header">
-          <h2>Key HMD Parameters</h2>
-          <p>IPD, eye relief, focal length, and FOV relationships.</p>
-        </header>
-        <div class="panel-body">
-          <div class="panel-canvas" data-canvas></div>
-          <div class="panel-controls" data-controls></div>
-          <div class="panel-readouts" data-readouts></div>
-        </div>
-      </section>
-
-      <section class="panel" id="frustum" data-panel="frustum">
-        <header class="panel-header">
-          <h2>View Frustum</h2>
-          <p>Understand off-axis projection and binocular overlap.</p>
-        </header>
-        <div class="panel-body">
-          <div class="panel-canvas" data-canvas></div>
-          <div class="panel-controls" data-controls></div>
-          <div class="panel-readouts" data-readouts></div>
-        </div>
-      </section>
-
-      <section class="panel" id="distortion" data-panel="distortion">
-        <header class="panel-header">
-          <h2>Lens Distortion</h2>
-          <p>Visualize barrel and pincushion correction.</p>
-        </header>
-        <div class="panel-body">
-          <div class="panel-canvas" data-canvas></div>
-          <div class="panel-controls" data-controls></div>
-          <div class="panel-readouts" data-readouts></div>
-        </div>
-      </section>
-
-      <section class="panel" id="vac" data-panel="vac">
-        <header class="panel-header">
-          <h2>Vergence-Accommodation</h2>
-          <p>Compare natural vision to VR mismatch.</p>
-        </header>
+        <div class="panel-title">VR Optics Explorer</div>
         <div class="panel-body">
           <div class="panel-canvas" data-canvas></div>
           <div class="panel-controls" data-controls></div>

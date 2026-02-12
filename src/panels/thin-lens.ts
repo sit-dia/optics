@@ -1,8 +1,12 @@
 import {
   drawArrow,
   drawDashedLine,
+  drawDisplay,
+  drawEye,
+  drawHMD,
   drawLabel,
   drawLens,
+  drawProjector,
   drawRay,
 } from '../canvas-utils';
 import { COLORS } from '../constants';
@@ -13,7 +17,6 @@ import { BasePanel } from '../ui-controls';
 export class ThinLensPanel extends BasePanel {
   private fInput: HTMLInputElement;
   private doInput: HTMLInputElement;
-  private calloutEl: HTMLDivElement;
 
   constructor(container: HTMLElement) {
     super(container);
@@ -28,28 +31,22 @@ export class ThinLensPanel extends BasePanel {
     });
     this.doInput = this.addSlider({
       id: 'thin-lens-do',
-      label: 'Object Distance (mm)',
+      label: 'Lens-to-Display Distance (mm)',
       min: 5,
       max: 500,
       step: 1,
-      value: 80,
+      value: 100,
       unit: 'mm',
     });
     this.addReadout({ id: 'thin-lens-di', label: 'Image Distance', unit: 'mm' });
     this.addReadout({ id: 'thin-lens-m', label: 'Magnification', unit: 'x' });
-    this.addReadout({ id: 'thin-lens-eq', label: 'Lens Equation', unit: '' });
-
-    this.calloutEl = document.createElement('div');
-    this.calloutEl.className = 'callout';
-    this.calloutEl.textContent =
-      'This is how HMD lenses work — display closer than f creates a magnified virtual image.';
-    this.controlsEl.appendChild(this.calloutEl);
+    this.addReadout({ id: 'thin-lens-regime', label: 'Regime', unit: '' });
   }
 
   render(): void {
     this.clear();
     const ctx = this.ctx;
-    ctx.fillStyle = '#0f1324';
+    ctx.fillStyle = '#111122';
     ctx.fillRect(0, 0, this.width, this.height);
 
     const f = Number(this.fInput.value);
@@ -64,16 +61,18 @@ export class ThinLensPanel extends BasePanel {
     const magText = Number.isFinite(mag) ? mag.toFixed(2) : '--';
     this.setReadout('thin-lens-di', diText);
     this.setReadout('thin-lens-m', magText);
-    this.setReadout(
-      'thin-lens-eq',
-      `1/${f.toFixed(0)} = 1/${doDistance.toFixed(0)} + 1/${diText}`
-    );
 
-    this.calloutEl.style.display = doDistance < f ? 'block' : 'none';
+    const regimeText =
+      imgType === 'infinity'
+        ? 'At focal point'
+        : doDistance < f
+          ? 'HMD (virtual image)'
+          : 'Projector (real image)';
+    this.setReadout('thin-lens-regime', regimeText);
 
     const padding = 24;
-    const xMin = -220;
-    const xMax = 220;
+    const xMin = -280;
+    const xMax = 280;
     const yMin = -120;
     const yMax = 120;
     const scaleX = (this.width - padding * 2) / (xMax - xMin);
@@ -95,6 +94,7 @@ export class ThinLensPanel extends BasePanel {
       );
     };
 
+    // --- Background: optical axis ---
     const axisStart = worldToCanvas(xMin, 0);
     const axisEnd = worldToCanvas(xMax, 0);
     drawDashedLine(ctx, axisStart.x, axisStart.y, axisEnd.x, axisEnd.y, {
@@ -102,9 +102,64 @@ export class ThinLensPanel extends BasePanel {
       dash: [6, 6],
     });
 
+    // --- Light direction arrow across top ---
+    const arrowLeft = worldToCanvas(xMin + 20, yMax - 14);
+    const arrowRight = worldToCanvas(xMax - 20, yMax - 14);
+    drawArrow(ctx, arrowLeft.x, arrowLeft.y, arrowRight.x, arrowRight.y, {
+      color: 'rgba(255,255,255,0.18)',
+      width: 1.5,
+      headSize: 8,
+    });
+    drawLabel(ctx, 'light direction →', (arrowLeft.x + arrowRight.x) / 2, arrowLeft.y - 10, {
+      color: 'rgba(255,255,255,0.35)',
+      background: 'transparent',
+    });
+
+    // --- Device outlines (drawn early so rays overlay) ---
     const lensPos = worldToCanvas(0, 0);
+    const eyeWorldX = 60;
+    const displayHalfH = 50;
+
+    if (doDistance > f && !nearInfinity) {
+      // Projector outline: trapezoid on left side around display→lens
+      const pLeft = worldToCanvas(-doDistance - 20, 0);
+      const pRight = worldToCanvas(0, 0);
+      const bodyW = pRight.x - pLeft.x;
+      const wideEnd = displayHalfH * 2 * scaleY + 30;
+      const narrowEnd = 140 + 10; // lens height + margin
+      drawProjector(ctx, pLeft.x, lensPos.y, wideEnd, narrowEnd, bodyW);
+      drawLabel(ctx, 'PROJECTOR', pLeft.x + bodyW / 2, lensPos.y - displayHalfH * scaleY - 28, {
+        color: '#4da6ff',
+        background: 'rgba(77,166,255,0.18)',
+      });
+    } else if (doDistance < f) {
+      // HMD outline: goggles encompassing display+lens+eye on right
+      const hmdLeft = worldToCanvas(-doDistance - 20, displayHalfH + 20);
+      const hmdRight = worldToCanvas(eyeWorldX + 30, -(displayHalfH + 20));
+      const hmdW = hmdRight.x - hmdLeft.x;
+      const hmdH = hmdRight.y - hmdLeft.y; // canvas y is inverted
+      drawHMD(ctx, hmdLeft.x, hmdLeft.y, hmdW, hmdH);
+      drawLabel(ctx, 'HMD', (hmdLeft.x + hmdRight.x) / 2, hmdLeft.y - 12, {
+        color: '#e94560',
+        background: 'rgba(233,69,96,0.18)',
+      });
+    }
+
+    // --- Lens centre vertical line (full canvas height, faint yellow) ---
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255, 215, 0, 0.15)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([6, 6]);
+    ctx.beginPath();
+    ctx.moveTo(lensPos.x, 0);
+    ctx.lineTo(lensPos.x, this.height);
+    ctx.stroke();
+    ctx.restore();
+
+    // --- Lens ---
     drawLens(ctx, lensPos.x, lensPos.y, 140, { color: COLORS.lens });
 
+    // --- Focal points ---
     const focalLeft = worldToCanvas(-f, 0);
     const focalRight = worldToCanvas(f, 0);
     drawLabel(ctx, 'F', focalLeft.x, focalLeft.y - 16, { color: COLORS.text });
@@ -122,6 +177,16 @@ export class ThinLensPanel extends BasePanel {
       { color: COLORS.axis, dash: [3, 4] }
     );
 
+    // --- Display rectangle at object position ---
+    const displayTop = worldToCanvas(-doDistance, displayHalfH);
+    const displayBot = worldToCanvas(-doDistance, -displayHalfH);
+    const dispW = 6;
+    drawDisplay(ctx, displayTop.x - dispW / 2, displayTop.y, dispW, displayBot.y - displayTop.y);
+    drawLabel(ctx, 'Display', displayTop.x, displayTop.y - 14, {
+      background: 'rgba(179, 157, 219, 0.25)',
+    });
+
+    // --- Object arrow (light-emitting point on display) ---
     const objectHeight = 40;
     const objectBase = worldToCanvas(-doDistance, 0);
     const objectTip = worldToCanvas(-doDistance, objectHeight);
@@ -129,10 +194,8 @@ export class ThinLensPanel extends BasePanel {
       color: COLORS.accent,
       width: 2.5,
     });
-    drawLabel(ctx, 'Object', objectTip.x, objectTip.y - 14, {
-      background: 'rgba(233, 69, 96, 0.2)',
-    });
 
+    // --- Image ---
     const lensWorld = { x: 0, y: 0 };
     const tipWorld = { x: -doDistance, y: objectHeight };
     const farX = xMax;
@@ -175,11 +238,12 @@ export class ThinLensPanel extends BasePanel {
         }
       );
     } else {
-      drawLabel(ctx, 'Image at infinity', lensPos.x + 90, lensPos.y - 40, {
+      drawLabel(ctx, 'Image at ∞', lensPos.x + 90, lensPos.y - 40, {
         background: 'rgba(255, 255, 255, 0.08)',
       });
     }
 
+    // --- Principal rays ---
     if (imgType === 'infinity') {
       drawWorldRay(
         [
@@ -263,17 +327,38 @@ export class ThinLensPanel extends BasePanel {
       }
     }
 
-    const regimeText =
+    // --- Eye (always on right) ---
+    // Projector: eye looks right toward real image; HMD: eye looks left into lens
+    const eyePos = worldToCanvas(eyeWorldX, 0);
+    const eyeRotation = doDistance < f ? Math.PI : 0;
+    drawEye(ctx, eyePos.x, eyePos.y, 18, eyeRotation);
+    drawLabel(ctx, 'Eye', eyePos.x, eyePos.y - 22, {
+      color: COLORS.text,
+      background: 'rgba(255,255,255,0.08)',
+    });
+
+    // --- Regime label ---
+    const regimeLabel =
       imgType === 'infinity'
-        ? 'Object at f → image at infinity'
+        ? 'd_o = f → image at ∞'
         : doDistance < f
-        ? 'HMD regime: virtual image'
-        : 'Projector regime: real image';
-    drawLabel(ctx, regimeText, lensPos.x, lensPos.y + 90, {
+          ? 'HMD regime: d_o < f → virtual image'
+          : 'Projector regime: d_o > f → real image';
+    drawLabel(ctx, regimeLabel, lensPos.x, lensPos.y + 90, {
       background:
         doDistance < f
           ? 'rgba(233, 69, 96, 0.2)'
-          : 'rgba(255, 255, 255, 0.08)',
+          : doDistance > f
+            ? 'rgba(77,166,255,0.15)'
+            : 'rgba(255, 255, 255, 0.08)',
+    });
+
+    // --- Equation on-canvas at bottom ---
+    const eqText = `1/f = 1/d_o + 1/d_i  →  1/${f} = 1/${doDistance} + 1/${diText}`;
+    drawLabel(ctx, eqText, this.width / 2, this.height - 16, {
+      color: 'rgba(255,255,255,0.6)',
+      background: 'rgba(0,0,0,0.5)',
+      font: '11px "Space Grotesk", system-ui, sans-serif',
     });
   }
 }
