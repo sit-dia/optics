@@ -42,9 +42,19 @@ export function drawLens(
   height: number,
   opts: LensOpts = {}
 ): void {
-  const { color = '#ffd700', width = 2 } = opts;
+  const { color = '#ffd700', width = 2, focalLength, fMin = 10, fMax = 200 } = opts;
   const h = height / 2;
-  const bulge = height * 0.12; // how far each arc bulges outward
+  // Bulge proportional to lens power (inversely proportional to focal length)
+  // Short focal length = more curved, long focal length = flatter
+  let bulge: number;
+  if (focalLength !== undefined && focalLength > 0) {
+    // Normalize focal length to [0, 1] where 0 = shortest (most curved), 1 = longest (flattest)
+    const t = Math.max(0, Math.min(1, (focalLength - fMin) / (fMax - fMin)));
+    // Bulge ranges from height*0.25 (short f, very curved) to height*0.04 (long f, nearly flat)
+    bulge = height * (0.25 - t * 0.21);
+  } else {
+    bulge = height * 0.12; // default fallback
+  }
   ctx.save();
   // Filled biconvex lens shape
   ctx.fillStyle = 'rgba(255, 215, 0, 0.08)';

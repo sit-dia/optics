@@ -22,6 +22,9 @@ export interface RayOpts extends LineOpts {
 export interface LensOpts {
   color?: string;
   width?: number;
+  focalLength?: number;
+  fMin?: number;
+  fMax?: number;
 }
 
 export interface LabelOpts {
