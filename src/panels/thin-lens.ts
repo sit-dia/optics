@@ -2,6 +2,8 @@ import {
   drawArrow,
   drawDashedLine,
   drawDisplay,
+  drawEdgeGlow,
+  drawEdgeLabel,
   drawEye,
   drawHMD,
   drawLabel,
@@ -178,50 +180,18 @@ export class ThinLensPanel extends BasePanel {
     const drawMag = Math.max(-maxDrawMag, Math.min(maxDrawMag, mag));
     const drawImageHeight = objectHeight * drawMag;
 
-    // --- Image clamping thresholds ---
-    // Determine whether images (real or virtual) are too far to show at true position.
-    // Use generous limits so images are shown at true position when possible,
-    // but clamp when they would blow up the viewport.
-    const maxRealExtent = Math.max(doDistance * 5, f * 5, 500);
-    const maxVirtualExtent = Math.max(doDistance * 2.5, f * 2, 350);
-    const virtualImageClamped = imgType === 'virtual' && Math.abs(diRaw) > maxVirtualExtent;
-    const realImageClamped = imgType === 'real' && diRaw > maxRealExtent;
-
-    // Compute the effective image height used for drawing (clamped for off-viewport images)
-    const clampedImageMag = (virtualImageClamped || realImageClamped)
-      ? Math.sign(drawMag) * Math.min(Math.abs(drawMag), 3)
-      : drawMag;
-    const clampedImageHeight = objectHeight * clampedImageMag;
-
-    // --- Fixed viewport approach to prevent chaotic auto-zoom ---
-    // Instead of computing from all scene points (which causes issues near singularity),
-    // use a stable viewport centered on the optical bench.
-    // The viewport only expands gently based on key anchors, not ray endpoints.
-
-    // Primary scene anchors (always stable)
-    const anchorMinX = -doDistance - 30; // display with margin
-    const anchorMaxX = eyeWorldX + 30;   // eye with margin
-
-    // Secondary: include image position only if within reasonable range
-    let effectiveMaxX = anchorMaxX;
-    let effectiveMinX = anchorMinX;
-    if (imgType !== 'infinity') {
-      const imageX = diRaw;
-      if (imgType === 'real' && imageX > 0 && !realImageClamped) {
-        effectiveMaxX = Math.max(effectiveMaxX, imageX + 30);
-      } else if (imgType === 'virtual' && imageX < 0 && !virtualImageClamped) {
-        effectiveMinX = Math.min(effectiveMinX, imageX - 30);
-      }
-    }
+    // --- FIXED viewport: never chase the image position ---
+    // Viewport is determined ONLY by display position, eye position, and focal points.
+    // Image distance (diRaw) is NEVER included in bounds.
+    const anchorMinX = -doDistance - 40; // display + margin
+    const anchorMaxX = Math.max(eyeWorldX + 40, f + 20); // eye/focal point + margin
 
     // Include focal points
-    effectiveMinX = Math.min(effectiveMinX, -f - 10);
-    effectiveMaxX = Math.max(effectiveMaxX, f + 10);
+    let effectiveMinX = Math.min(anchorMinX, -f - 10);
+    let effectiveMaxX = Math.max(anchorMaxX, f + 10);
 
-    // Y bounds: use the clamped image height (not raw drawImageHeight) to avoid
-    // wasting vertical space when the image arrow is capped
-    const imageHalfY = Math.abs(clampedImageHeight) + 10;
-    const sceneHalfY = Math.max(displayHalfH + 20, lensHalfHeight + 10, imageHalfY, 80);
+    // Y bounds: based on display, lens, object arrow only
+    const sceneHalfY = Math.max(displayHalfH + 20, lensHalfHeight + 10, objectHeight + 20, 80);
 
     let worldMinX = effectiveMinX;
     let worldMaxX = effectiveMaxX;
@@ -446,91 +416,60 @@ export class ThinLensPanel extends BasePanel {
     });
 
     // --- Image ---
-    // Compute the drawn image position (clamped for off-viewport images).
-    // These are hoisted here so backward extension lines can reference them.
-    const clampMargin = (xMax - xMin) * 0.05;
-    let drawImageX = diRaw;
-    let clampedDrawHeight = drawImageHeight;
+    // With the fixed viewport, we check if the image position is within the
+    // visible world bounds. If off-screen, show edge glow instead of drawing
+    // the image arrow.
+    const imageOffScreenLeft = imgType === 'virtual' && diRaw < worldMinX;
+    const imageOffScreenRight = imgType === 'real' && diRaw > worldMaxX;
+    const imageOffScreen = imageOffScreenLeft || imageOffScreenRight;
+
+    // Check if image arrow tip exceeds Y bounds
+    const imageTipY = drawImageHeight;
+    const imageOffScreenTop = imgType !== 'infinity' && !imageOffScreen && imageTipY > worldMaxY;
+    const imageOffScreenBottom = imgType !== 'infinity' && !imageOffScreen && imageTipY < worldMinY;
+
     if (imgType !== 'infinity') {
-      drawImageX = virtualImageClamped
-        ? xMin + clampMargin
-        : realImageClamped
-          ? xMax - clampMargin
-          : Math.max(xMin + clampMargin, Math.min(xMax - clampMargin, diRaw));
-      if (virtualImageClamped) {
-        // When virtual image is clamped to viewport edge, compute the arrow
-        // height at that position from the convergence of backward-extended rays.
-        // Use Ray 1 slope: exits (0, objectHeight) with slope -objectHeight/f
-        // and Ray 2 slope: exits (0, 0) with slope -objectHeight/doDistance.
-        // At the clamped x, these give different y, so average them for a
-        // representative arrow. Cap height to prevent dominating the viewport.
-        const r1Slope = -objectHeight / f;
-        const r2Slope = -objectHeight / doDistance;
-        const r1Y = objectHeight + r1Slope * drawImageX;
-        const r2Y = r2Slope * drawImageX;
-        const avgY = (r1Y + r2Y) / 2;
-        const maxDrawH = objectHeight * 4;
-        clampedDrawHeight = Math.max(-maxDrawH, Math.min(maxDrawH, avgY));
-      } else if (realImageClamped) {
-        clampedDrawHeight = objectHeight * Math.sign(drawMag) * Math.min(Math.abs(drawMag), 3);
-      } else {
-        clampedDrawHeight = drawImageHeight;
-      }
-      const imageBase = worldToCanvas(drawImageX, 0);
-      const imageTip = worldToCanvas(drawImageX, clampedDrawHeight);
-      if (imgType === 'virtual') {
-        drawDashedLine(
-          ctx,
-          imageBase.x,
-          imageBase.y,
-          imageTip.x,
-          imageTip.y,
-          { color: COLORS.virtualImage, dash: [6, 6], width: 2 }
-        );
-        drawArrow(ctx, imageBase.x, imageBase.y, imageTip.x, imageTip.y, {
-          color: COLORS.virtualImage,
-          width: 2,
-          headSize: 6,
-        });
-        // If clamped, draw a "..." indicator and arrow pointing further left
-        if (virtualImageClamped) {
-          const indX = imageBase.x - 8;
-          drawLabel(ctx, '\u2190 ' + diRaw.toFixed(0) + 'mm', indX, imageBase.y - 18, {
+      if (!imageOffScreen) {
+        // Image is within viewport: draw it at its true position
+        const imageBase = worldToCanvas(diRaw, 0);
+        const imageTip = worldToCanvas(diRaw, drawImageHeight);
+        if (imgType === 'virtual') {
+          drawDashedLine(
+            ctx,
+            imageBase.x,
+            imageBase.y,
+            imageTip.x,
+            imageTip.y,
+            { color: COLORS.virtualImage, dash: [6, 6], width: 2 }
+          );
+          drawArrow(ctx, imageBase.x, imageBase.y, imageTip.x, imageTip.y, {
             color: COLORS.virtualImage,
-            background: 'rgba(168, 85, 247, 0.3)',
-            font: '10px "Space Grotesk", system-ui, sans-serif',
+            width: 2,
+            headSize: 6,
           });
-        }
-      } else {
-        drawArrow(ctx, imageBase.x, imageBase.y, imageTip.x, imageTip.y, {
-          color: COLORS.rayGreen,
-          width: 2.5,
-        });
-        // If real image is clamped, draw an indicator showing true distance
-        if (realImageClamped) {
-          const indX = imageBase.x + 8;
-          drawLabel(ctx, '\u2192 ' + diRaw.toFixed(0) + 'mm', indX, imageBase.y - 18, {
+        } else {
+          drawArrow(ctx, imageBase.x, imageBase.y, imageTip.x, imageTip.y, {
             color: COLORS.rayGreen,
-            background: 'rgba(76, 175, 80, 0.3)',
-            font: '10px "Space Grotesk", system-ui, sans-serif',
+            width: 2.5,
           });
         }
+        const imgLabelText = imgType === 'virtual' ? 'Virtual Image' : 'Real Image';
+        const imgLS = measureLabel(imgLabelText);
+        const imgLP = labels.place(imageTip.x, imageTip.y - 16, imgLS.w, imgLS.h);
+        drawLabel(
+          ctx,
+          imgLabelText,
+          imgLP.x,
+          imgLP.y,
+          {
+            background:
+              imgType === 'virtual'
+                ? 'rgba(168, 85, 247, 0.25)'
+                : 'rgba(76, 175, 80, 0.2)',
+          }
+        );
       }
-      const imgLabelText = imgType === 'virtual' ? 'Virtual Image' : 'Real Image';
-      const imgLS = measureLabel(imgLabelText);
-      const imgLP = labels.place(imageTip.x, imageTip.y - 16, imgLS.w, imgLS.h);
-      drawLabel(
-        ctx,
-        imgLabelText,
-        imgLP.x,
-        imgLP.y,
-        {
-          background:
-            imgType === 'virtual'
-              ? 'rgba(168, 85, 247, 0.25)'
-              : 'rgba(76, 175, 80, 0.2)',
-        }
-      );
+      // Edge glow and labels are drawn AFTER all other scene elements (see below)
     } else {
       drawLabel(ctx, 'Image at \u221e', lensPos.x + 90, lensPos.y - 40, {
         background: 'rgba(255, 255, 255, 0.08)',
@@ -697,6 +636,32 @@ export class ThinLensPanel extends BasePanel {
             ? 'rgba(77,166,255,0.15)'
             : 'rgba(255, 255, 255, 0.08)',
     });
+
+    // --- Red glow edge indicators for off-screen content ---
+    if (imgType !== 'infinity') {
+      if (imageOffScreenLeft) {
+        drawEdgeGlow(ctx, 'left', this.width, this.height);
+        const dist = Math.abs(diRaw).toFixed(0);
+        drawEdgeLabel(ctx, 'left', this.width, this.height,
+          '\u2190 Virtual Image ' + dist + 'mm',
+          { color: COLORS.virtualImage, yPos: lensPos.y - 20 }
+        );
+      }
+      if (imageOffScreenRight) {
+        drawEdgeGlow(ctx, 'right', this.width, this.height);
+        const dist = diRaw.toFixed(0);
+        drawEdgeLabel(ctx, 'right', this.width, this.height,
+          'Real Image ' + dist + 'mm \u2192',
+          { color: COLORS.rayGreen, yPos: lensPos.y - 20 }
+        );
+      }
+      if (imageOffScreenTop) {
+        drawEdgeGlow(ctx, 'top', this.width, this.height);
+      }
+      if (imageOffScreenBottom) {
+        drawEdgeGlow(ctx, 'bottom', this.width, this.height);
+      }
+    }
 
     // --- Equation on-canvas at bottom ---
     const eqText = `1/f = 1/d_o + 1/d_i  \u2192  1/${f} = 1/${doDistance} + 1/${diText}`;

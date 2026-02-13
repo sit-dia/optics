@@ -357,6 +357,96 @@ export function drawHMD(
   ctx.restore();
 }
 
+/**
+ * Draw a red/warm gradient glow strip on the indicated edge of the canvas,
+ * signalling that content (image, rays, etc.) extends beyond the viewable area.
+ */
+export function drawEdgeGlow(
+  ctx: CanvasRenderingContext2D,
+  side: 'left' | 'right' | 'top' | 'bottom',
+  canvasW: number,
+  canvasH: number,
+  opts: { intensity?: number } = {}
+): void {
+  const intensity = opts.intensity ?? 0.4;
+  const glowW = 36; // gradient strip width in pixels
+  ctx.save();
+  let gradient: CanvasGradient;
+
+  switch (side) {
+    case 'left':
+      gradient = ctx.createLinearGradient(0, 0, glowW, 0);
+      gradient.addColorStop(0, `rgba(255, 60, 60, ${intensity})`);
+      gradient.addColorStop(1, 'rgba(255, 60, 60, 0.0)');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, glowW, canvasH);
+      break;
+    case 'right':
+      gradient = ctx.createLinearGradient(canvasW, 0, canvasW - glowW, 0);
+      gradient.addColorStop(0, `rgba(255, 60, 60, ${intensity})`);
+      gradient.addColorStop(1, 'rgba(255, 60, 60, 0.0)');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(canvasW - glowW, 0, glowW, canvasH);
+      break;
+    case 'top':
+      gradient = ctx.createLinearGradient(0, 0, 0, glowW);
+      gradient.addColorStop(0, `rgba(255, 60, 60, ${intensity})`);
+      gradient.addColorStop(1, 'rgba(255, 60, 60, 0.0)');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, canvasW, glowW);
+      break;
+    case 'bottom':
+      gradient = ctx.createLinearGradient(0, canvasH, 0, canvasH - glowW);
+      gradient.addColorStop(0, `rgba(255, 60, 60, ${intensity})`);
+      gradient.addColorStop(1, 'rgba(255, 60, 60, 0.0)');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, canvasH - glowW, canvasW, glowW);
+      break;
+  }
+  ctx.restore();
+}
+
+/**
+ * Draw an off-screen indicator label at the glowing edge, showing
+ * the type and distance of the off-screen element.
+ */
+export function drawEdgeLabel(
+  ctx: CanvasRenderingContext2D,
+  side: 'left' | 'right',
+  canvasW: number,
+  canvasH: number,
+  text: string,
+  opts: { color?: string; yPos?: number } = {}
+): void {
+  const { color = '#ff6b6b', yPos } = opts;
+  const font = '11px "Space Grotesk", system-ui, sans-serif';
+  const y = yPos ?? canvasH * 0.35;
+  ctx.save();
+  ctx.font = font;
+  const metrics = ctx.measureText(text);
+  const tw = metrics.width + 12;
+  const th = 22;
+
+  if (side === 'left') {
+    const x = 8;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.fillRect(x, y - th / 2, tw, th);
+    ctx.fillStyle = color;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, x + 6, y);
+  } else {
+    const x = canvasW - 8;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.fillRect(x - tw, y - th / 2, tw, th);
+    ctx.fillStyle = color;
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, x - 6, y);
+  }
+  ctx.restore();
+}
+
 export function drawLabel(
   ctx: CanvasRenderingContext2D,
   text: string,
