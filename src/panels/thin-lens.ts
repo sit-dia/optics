@@ -14,6 +14,58 @@ import { imageDistance, imageType, magnification } from '../optics-math';
 import type { Point } from '../types';
 import { BasePanel } from '../ui-controls';
 
+/**
+ * Label placement helper: tracks placed label bounding boxes and nudges
+ * new labels so they don't overlap previous ones.
+ */
+interface LabelRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+class LabelPlacer {
+  private placed: LabelRect[] = [];
+
+  /** Register a label and return adjusted (x,y) that avoids collisions. */
+  place(x: number, y: number, w: number, h: number): { x: number; y: number } {
+    const candidate: LabelRect = { x: x - w / 2, y: y - h / 2, w, h };
+    let bestX = candidate.x;
+    let bestY = candidate.y;
+    // Try shifts: original, then progressively further up/down/left/right
+    const shifts = [
+      [0, 0], [0, -h - 2], [0, h + 2],
+      [-w - 4, 0], [w + 4, 0],
+      [0, -h * 2 - 4], [0, h * 2 + 4],
+      [-w - 4, -h - 2], [w + 4, -h - 2],
+    ];
+    for (const [dx, dy] of shifts) {
+      const cx = candidate.x + dx;
+      const cy = candidate.y + dy;
+      let overlap = false;
+      for (const p of this.placed) {
+        if (
+          cx < p.x + p.w &&
+          cx + w > p.x &&
+          cy < p.y + p.h &&
+          cy + h > p.y
+        ) {
+          overlap = true;
+          break;
+        }
+      }
+      if (!overlap) {
+        bestX = cx;
+        bestY = cy;
+        break;
+      }
+    }
+    this.placed.push({ x: bestX, y: bestY, w, h });
+    return { x: bestX + w / 2, y: bestY + h / 2 };
+  }
+}
+
 export class ThinLensPanel extends BasePanel {
   private fInput: HTMLInputElement;
   private doInput: HTMLInputElement;
@@ -52,7 +104,8 @@ export class ThinLensPanel extends BasePanel {
     const f = Number(this.fInput.value);
     const doDistance = Number(this.doInput.value);
     const diRaw = imageDistance(f, doDistance);
-    const nearInfinity = Math.abs(doDistance - f) < 1;
+    // Widen the near-infinity zone so the singularity is handled gracefully
+    const nearInfinity = Math.abs(doDistance - f) < 3;
     const di = nearInfinity ? Number.POSITIVE_INFINITY : diRaw;
     const imgType = nearInfinity ? 'infinity' : imageType(di);
     const mag = magnification(diRaw, doDistance);
@@ -71,11 +124,12 @@ export class ThinLensPanel extends BasePanel {
     this.setReadout('thin-lens-regime', regimeText);
 
     const objectHeight = 40;
-    const eyeWorldX = 60;
     const displayHalfH = 50;
 
-    // --- Compute all ray intersection y-values at the lens (x=0) ---
-    // These are needed to size the lens to encompass all rays
+    // --- Eye position adapts to regime ---
+    // In HMD mode, place eye further right so the HMD outline has room
+    const eyeWorldX = doDistance < f ? Math.max(80, f * 0.8) : 60;
+
     const tipWorld = { x: -doDistance, y: objectHeight };
     const lensWorld = { x: 0, y: 0 };
 
@@ -83,106 +137,71 @@ export class ThinLensPanel extends BasePanel {
     const rayYsAtLens: number[] = [];
 
     if (imgType === 'infinity') {
-      // Ray 1: horizontal from tip -> hits lens at tip.y
       rayYsAtLens.push(tipWorld.y);
-      // Ray 2: through centre -> hits lens at 0
       rayYsAtLens.push(0);
-      // Ray 3: parallel (same as ray 1 for infinity case) -> hits lens at tip.y
       rayYsAtLens.push(tipWorld.y);
     } else {
-      // Ray 1: horizontal from tip, hits lens at y = tipWorld.y
       rayYsAtLens.push(tipWorld.y);
-      // Ray 2: through centre, hits lens at y = 0
       rayYsAtLens.push(lensWorld.y);
-      // Ray 3: aimed at focal-point-on-left (-f, 0), arrives at lens
       const slope3 = (0 - tipWorld.y) / (-f - tipWorld.x);
       const yAtLens = tipWorld.y + slope3 * (0 - tipWorld.x);
       rayYsAtLens.push(yAtLens);
     }
 
-    // Lens height: encompass all ray intersections plus margin
+    // Lens height: encompass ray intersections but CAP to prevent giant lens
     const maxRayY = Math.max(...rayYsAtLens.map(Math.abs));
-    const lensHalfHeight = Math.max(maxRayY + 12, 40); // at least 40 world units half-height
+    // Cap lens half-height: minimum 40, grows with rays but max ~120 world units
+    const lensHalfHeight = Math.min(Math.max(maxRayY + 12, 40), 120);
     const lensHeight = lensHalfHeight * 2;
 
-    // --- Compute bounding box for auto-zoom ---
-    // Collect all important world-space points
-    const scenePoints: Point[] = [];
+    // --- Fixed viewport approach to prevent chaotic auto-zoom ---
+    // Instead of computing from all scene points (which causes issues near singularity),
+    // use a stable viewport centered on the optical bench.
+    // The viewport only expands gently based on key anchors, not ray endpoints.
 
-    // Display
-    scenePoints.push({ x: -doDistance, y: displayHalfH });
-    scenePoints.push({ x: -doDistance, y: -displayHalfH });
+    // Primary scene anchors (always stable)
+    const anchorMinX = -doDistance - 30; // display with margin
+    const anchorMaxX = eyeWorldX + 30;   // eye with margin
 
-    // Object tip
-    scenePoints.push({ x: -doDistance, y: objectHeight });
-
-    // Lens bounds
-    scenePoints.push({ x: 0, y: lensHalfHeight });
-    scenePoints.push({ x: 0, y: -lensHalfHeight });
-
-    // Focal points
-    scenePoints.push({ x: -f, y: 0 });
-    scenePoints.push({ x: f, y: 0 });
-
-    // Eye
-    scenePoints.push({ x: eyeWorldX + 20, y: 30 });
-    scenePoints.push({ x: eyeWorldX + 20, y: -30 });
-
-    // Image (if not at infinity and within reasonable bounds)
+    // Secondary: include image position if it's within a reasonable range
+    let effectiveMaxX = anchorMaxX;
+    let effectiveMinX = anchorMinX;
     if (imgType !== 'infinity') {
-      const imageHeight = objectHeight * mag;
       const imageX = diRaw;
-      // Clamp image position for viewport calculation to avoid extreme zoom-out
-      const clampedImageX = Math.max(-2000, Math.min(2000, imageX));
-      const clampedImageH = Math.max(-400, Math.min(400, imageHeight));
-      scenePoints.push({ x: clampedImageX, y: 0 });
-      scenePoints.push({ x: clampedImageX, y: clampedImageH });
+      // Only expand viewport for images within 5x the display distance
+      const maxReasonableX = Math.max(doDistance * 5, 400);
+      if (imageX > 0 && imageX < maxReasonableX) {
+        effectiveMaxX = Math.max(effectiveMaxX, imageX + 30);
+      }
+      if (imageX < 0 && imageX > -maxReasonableX) {
+        effectiveMinX = Math.min(effectiveMinX, imageX - 30);
+      }
     }
 
-    // Ray endpoints (where rays reach on the right side)
-    // Use a reasonable initial farX to bound the rays
-    const initialFarX = 280;
+    // Include focal points
+    effectiveMinX = Math.min(effectiveMinX, -f - 10);
+    effectiveMaxX = Math.max(effectiveMaxX, f + 10);
 
-    if (imgType === 'infinity') {
-      // Rays go horizontal or diverge
-      scenePoints.push({ x: initialFarX, y: tipWorld.y });
-      scenePoints.push({ x: initialFarX, y: (tipWorld.y / doDistance) * initialFarX * -1 });
-    } else {
-      const slope1 = -tipWorld.y / f;
-      const ray1EndY = tipWorld.y + slope1 * initialFarX;
-      scenePoints.push({ x: initialFarX, y: ray1EndY });
+    // Y bounds: based on display height and lens, not diverging rays
+    const sceneHalfY = Math.max(displayHalfH + 20, lensHalfHeight + 10, 80);
 
-      const slope2 = (lensWorld.y - tipWorld.y) / (lensWorld.x - tipWorld.x);
-      const ray2EndY = lensWorld.y + slope2 * initialFarX;
-      scenePoints.push({ x: initialFarX, y: ray2EndY });
+    let worldMinX = effectiveMinX;
+    let worldMaxX = effectiveMaxX;
+    let worldMinY = -sceneHalfY;
+    let worldMaxY = sceneHalfY;
 
-      const slope3 = (0 - tipWorld.y) / (-f - tipWorld.x);
-      const yAtLens = tipWorld.y + slope3 * (0 - tipWorld.x);
-      scenePoints.push({ x: initialFarX, y: yAtLens });
-    }
-
-    // Calculate world bounding box
-    let worldMinX = Infinity, worldMaxX = -Infinity;
-    let worldMinY = Infinity, worldMaxY = -Infinity;
-    for (const p of scenePoints) {
-      if (p.x < worldMinX) worldMinX = p.x;
-      if (p.x > worldMaxX) worldMaxX = p.x;
-      if (p.y < worldMinY) worldMinY = p.y;
-      if (p.y > worldMaxY) worldMaxY = p.y;
-    }
-
-    // Add padding (percentage on each side)
+    // Add padding
     const worldW = worldMaxX - worldMinX;
     const worldH = worldMaxY - worldMinY;
-    const padFractionX = 0.12;
-    const padFractionY = 0.18;
+    const padFractionX = 0.08;
+    const padFractionY = 0.12;
     worldMinX -= worldW * padFractionX;
     worldMaxX += worldW * padFractionX;
     worldMinY -= worldH * padFractionY;
     worldMaxY += worldH * padFractionY;
 
-    // Enforce minimum viewport size so scene doesn't zoom in too much
-    const minWorldW = 400;
+    // Enforce minimum viewport size
+    const minWorldW = 300;
     const minWorldH = 180;
     const currentW = worldMaxX - worldMinX;
     const currentH = worldMaxY - worldMinY;
@@ -197,17 +216,15 @@ export class ThinLensPanel extends BasePanel {
       worldMaxY += expand;
     }
 
-    // Maintain aspect ratio to prevent distortion
+    // Maintain aspect ratio
     const canvasAspect = this.width / this.height;
     const worldAspect = (worldMaxX - worldMinX) / (worldMaxY - worldMinY);
     if (worldAspect > canvasAspect) {
-      // World is wider than canvas: expand Y
       const targetH = (worldMaxX - worldMinX) / canvasAspect;
       const expandY = (targetH - (worldMaxY - worldMinY)) / 2;
       worldMinY -= expandY;
       worldMaxY += expandY;
     } else {
-      // World is taller than canvas: expand X
       const targetW = (worldMaxY - worldMinY) * canvasAspect;
       const expandX = (targetW - (worldMaxX - worldMinX)) / 2;
       worldMinX -= expandX;
@@ -242,6 +259,16 @@ export class ThinLensPanel extends BasePanel {
       );
     };
 
+    // Label placer to avoid overlaps
+    const labels = new LabelPlacer();
+    const measureLabel = (text: string, font?: string): { w: number; h: number } => {
+      ctx.save();
+      ctx.font = font ?? '12px "Space Grotesk", system-ui, sans-serif';
+      const m = ctx.measureText(text);
+      ctx.restore();
+      return { w: m.width + 8, h: 20 };
+    };
+
     // --- Background: optical axis ---
     const axisStart = worldToCanvas(xMin, 0);
     const axisEnd = worldToCanvas(xMax, 0);
@@ -267,29 +294,36 @@ export class ThinLensPanel extends BasePanel {
     const lensPos = worldToCanvas(0, 0);
 
     if (doDistance > f && !nearInfinity) {
-      // Projector outline: trapezoid on left side around display->lens
+      // Projector outline
       const pLeft = worldToCanvas(-doDistance - 20, 0);
       const pRight = worldToCanvas(0, 0);
       const bodyW = pRight.x - pLeft.x;
       const wideEnd = displayHalfH * 2 * scaleY + 30;
       const lensCanvasH = lensHeight * scaleY;
-      const narrowEnd = lensCanvasH + 10; // lens height + margin
+      const narrowEnd = lensCanvasH + 10;
       drawProjector(ctx, pLeft.x, lensPos.y, wideEnd, narrowEnd, bodyW);
-      drawLabel(ctx, 'PROJECTOR', pLeft.x + bodyW / 2, lensPos.y - displayHalfH * scaleY - 28, {
-        color: '#4da6ff',
-        background: 'rgba(77,166,255,0.18)',
-      });
     } else if (doDistance < f) {
-      // HMD outline: goggles encompassing display+lens+eye on right
+      // HMD outline: ensure minimum canvas-pixel size for visibility
       const hmdLeft = worldToCanvas(-doDistance - 20, displayHalfH + 20);
       const hmdRight = worldToCanvas(eyeWorldX + 30, -(displayHalfH + 20));
-      const hmdW = hmdRight.x - hmdLeft.x;
-      const hmdH = hmdRight.y - hmdLeft.y; // canvas y is inverted
-      drawHMD(ctx, hmdLeft.x, hmdLeft.y, hmdW, hmdH);
-      drawLabel(ctx, 'HMD', (hmdLeft.x + hmdRight.x) / 2, hmdLeft.y - 12, {
-        color: '#e94560',
-        background: 'rgba(233,69,96,0.18)',
-      });
+      let hmdW = hmdRight.x - hmdLeft.x;
+      let hmdH = hmdRight.y - hmdLeft.y; // canvas y is inverted
+      // Enforce minimum HMD outline size (at least 120x80 canvas pixels)
+      const minHmdW = 120;
+      const minHmdH = 80;
+      let hmdX = hmdLeft.x;
+      let hmdY = hmdLeft.y;
+      if (hmdW < minHmdW) {
+        const expand = (minHmdW - hmdW) / 2;
+        hmdX -= expand;
+        hmdW = minHmdW;
+      }
+      if (hmdH < minHmdH) {
+        const expand = (minHmdH - hmdH) / 2;
+        hmdY -= expand;
+        hmdH = minHmdH;
+      }
+      drawHMD(ctx, hmdX, hmdY, hmdW, hmdH);
     }
 
     // --- Lens centre vertical line (full canvas height, faint yellow) ---
@@ -305,7 +339,10 @@ export class ThinLensPanel extends BasePanel {
 
     // --- Lens (dynamic height, convexity reflects focal length) ---
     const lensCanvasHeight = lensHeight * scaleY;
-    drawLens(ctx, lensPos.x, lensPos.y, lensCanvasHeight, {
+    // Cap lens canvas size to at most 80% of canvas height to prevent domination
+    const maxLensCanvasH = this.height * 0.8;
+    const effectiveLensH = Math.min(lensCanvasHeight, maxLensCanvasH);
+    drawLens(ctx, lensPos.x, lensPos.y, effectiveLensH, {
       color: COLORS.lens,
       focalLength: f,
       fMin: Number(this.fInput.min),
@@ -317,7 +354,6 @@ export class ThinLensPanel extends BasePanel {
     const focalRight = worldToCanvas(f, 0);
     const focalTickHalf = 10;
     const focalFont = 'italic 11px "Space Grotesk", system-ui, sans-serif';
-    // Solid tick marks
     ctx.save();
     ctx.strokeStyle = COLORS.lens;
     ctx.lineWidth = 2;
@@ -330,13 +366,18 @@ export class ThinLensPanel extends BasePanel {
     ctx.lineTo(focalRight.x, focalRight.y + focalTickHalf);
     ctx.stroke();
     ctx.restore();
-    // Labels below axis to avoid clashing with Display/PROJECTOR labels above
-    drawLabel(ctx, 'f', focalLeft.x, focalLeft.y + focalTickHalf + 12, {
+
+    // Focal point labels via placer
+    const fLabelSize = measureLabel('f', focalFont);
+    const fPos = labels.place(focalLeft.x, focalLeft.y + focalTickHalf + 12, fLabelSize.w, fLabelSize.h);
+    drawLabel(ctx, 'f', fPos.x, fPos.y, {
       color: COLORS.lens,
       font: focalFont,
       background: 'rgba(0,0,0,0.5)',
     });
-    drawLabel(ctx, "f\u2032", focalRight.x, focalRight.y + focalTickHalf + 12, {
+    const fpLabelSize = measureLabel("f\u2032", focalFont);
+    const fpPos = labels.place(focalRight.x, focalRight.y + focalTickHalf + 12, fpLabelSize.w, fpLabelSize.h);
+    drawLabel(ctx, "f\u2032", fpPos.x, fpPos.y, {
       color: COLORS.lens,
       font: focalFont,
       background: 'rgba(0,0,0,0.5)',
@@ -347,7 +388,9 @@ export class ThinLensPanel extends BasePanel {
     const displayBot = worldToCanvas(-doDistance, -displayHalfH);
     const dispW = 6;
     drawDisplay(ctx, displayTop.x - dispW / 2, displayTop.y, dispW, displayBot.y - displayTop.y);
-    drawLabel(ctx, 'Display', displayTop.x, displayTop.y - 16, {
+    const dispLabelSize = measureLabel('Display');
+    const dispLabelPos = labels.place(displayTop.x, displayTop.y - 16, dispLabelSize.w, dispLabelSize.h);
+    drawLabel(ctx, 'Display', dispLabelPos.x, dispLabelPos.y, {
       background: 'rgba(179, 157, 219, 0.25)',
     });
 
@@ -363,8 +406,11 @@ export class ThinLensPanel extends BasePanel {
     if (imgType !== 'infinity') {
       const imageHeight = objectHeight * mag;
       const imageX = diRaw;
-      const imageBase = worldToCanvas(imageX, 0);
-      const imageTip = worldToCanvas(imageX, imageHeight);
+      // Clamp image drawing position for extreme values
+      const drawImageX = Math.max(xMin, Math.min(xMax, imageX));
+      const drawImageH = Math.max(-300, Math.min(300, imageHeight));
+      const imageBase = worldToCanvas(drawImageX, 0);
+      const imageTip = worldToCanvas(drawImageX, drawImageH);
       if (imgType === 'virtual') {
         drawDashedLine(
           ctx,
@@ -386,16 +432,13 @@ export class ThinLensPanel extends BasePanel {
         });
       }
       const imgLabelText = imgType === 'virtual' ? 'Virtual Image' : 'Real Image';
-      // Nudge image label when it would overlap the Eye label
-      const eyeCanvasX = worldToCanvas(eyeWorldX, 0).x;
-      const tooCloseToEye = Math.abs(imageTip.x - eyeCanvasX) < 60;
-      const imgLabelX = tooCloseToEye ? imageTip.x - 50 : imageTip.x;
-      const imgLabelY = tooCloseToEye ? imageTip.y + 16 : imageTip.y - 16;
+      const imgLS = measureLabel(imgLabelText);
+      const imgLP = labels.place(imageTip.x, imageTip.y - 16, imgLS.w, imgLS.h);
       drawLabel(
         ctx,
         imgLabelText,
-        imgLabelX,
-        imgLabelY,
+        imgLP.x,
+        imgLP.y,
         {
           background:
             imgType === 'virtual'
@@ -477,7 +520,9 @@ export class ThinLensPanel extends BasePanel {
       );
 
       if (imgType === 'virtual') {
-        const imagePoint = { x: diRaw, y: objectHeight * mag };
+        const clampedDi = Math.max(-2000, Math.min(2000, diRaw));
+        const clampedMag = Math.max(-20, Math.min(20, mag));
+        const imagePoint = { x: clampedDi, y: objectHeight * clampedMag };
         drawWorldRay([
           { x: 0, y: tipWorld.y },
           imagePoint,
@@ -494,14 +539,37 @@ export class ThinLensPanel extends BasePanel {
     }
 
     // --- Eye (always on right) ---
-    // Projector: eye looks right toward real image; HMD: eye looks left into lens
     const eyePos = worldToCanvas(eyeWorldX, 0);
     const eyeRotation = doDistance < f ? Math.PI : 0;
     drawEye(ctx, eyePos.x, eyePos.y, 14, eyeRotation);
-    drawLabel(ctx, 'Eye', eyePos.x, eyePos.y - 26, {
+    const eyeLS = measureLabel('Eye');
+    const eyeLP = labels.place(eyePos.x, eyePos.y - 26, eyeLS.w, eyeLS.h);
+    drawLabel(ctx, 'Eye', eyeLP.x, eyeLP.y, {
       color: COLORS.text,
       background: 'rgba(255,255,255,0.08)',
     });
+
+    // --- Device label (drawn after rays so it's on top, placed via label placer) ---
+    if (doDistance > f && !nearInfinity) {
+      const pLeft = worldToCanvas(-doDistance - 20, 0);
+      const pRight = worldToCanvas(0, 0);
+      const bodyW = pRight.x - pLeft.x;
+      const projLS = measureLabel('PROJECTOR');
+      const projLP = labels.place(pLeft.x + bodyW / 2, lensPos.y - displayHalfH * scaleY - 28, projLS.w, projLS.h);
+      drawLabel(ctx, 'PROJECTOR', projLP.x, projLP.y, {
+        color: '#4da6ff',
+        background: 'rgba(77,166,255,0.18)',
+      });
+    } else if (doDistance < f) {
+      const hmdLeft = worldToCanvas(-doDistance - 20, displayHalfH + 20);
+      const hmdRight = worldToCanvas(eyeWorldX + 30, -(displayHalfH + 20));
+      const hmdLS = measureLabel('HMD');
+      const hmdLP = labels.place((hmdLeft.x + hmdRight.x) / 2, hmdLeft.y - 12, hmdLS.w, hmdLS.h);
+      drawLabel(ctx, 'HMD', hmdLP.x, hmdLP.y, {
+        color: '#e94560',
+        background: 'rgba(233,69,96,0.18)',
+      });
+    }
 
     // --- Regime label ---
     const regimeLabel =
@@ -510,7 +578,9 @@ export class ThinLensPanel extends BasePanel {
         : doDistance < f
           ? 'HMD regime: d_o < f \u2192 virtual image'
           : 'Projector regime: d_o > f \u2192 real image';
-    drawLabel(ctx, regimeLabel, lensPos.x, lensPos.y + 70, {
+    const regLS = measureLabel(regimeLabel);
+    const regLP = labels.place(lensPos.x, lensPos.y + 70, regLS.w, regLS.h);
+    drawLabel(ctx, regimeLabel, regLP.x, regLP.y, {
       background:
         doDistance < f
           ? 'rgba(233, 69, 96, 0.2)'
