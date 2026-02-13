@@ -461,11 +461,11 @@ export class ThinLensPanel extends BasePanel {
         // When virtual image is clamped to viewport edge, compute the arrow
         // height at that position from the convergence of backward-extended rays.
         // Use Ray 1 slope: exits (0, objectHeight) with slope -objectHeight/f
-        // and Ray 2 slope: exits (0, 0) with slope objectHeight/doDistance.
+        // and Ray 2 slope: exits (0, 0) with slope -objectHeight/doDistance.
         // At the clamped x, these give different y, so average them for a
         // representative arrow. Cap height to prevent dominating the viewport.
         const r1Slope = -objectHeight / f;
-        const r2Slope = objectHeight / doDistance;
+        const r2Slope = -objectHeight / doDistance;
         const r1Y = objectHeight + r1Slope * drawImageX;
         const r2Y = r2Slope * drawImageX;
         const avgY = (r1Y + r2Y) / 2;
