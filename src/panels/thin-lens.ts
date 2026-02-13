@@ -104,8 +104,10 @@ export class ThinLensPanel extends BasePanel {
     const f = Number(this.fInput.value);
     const doDistance = Number(this.doInput.value);
     const diRaw = imageDistance(f, doDistance);
-    // Widen the near-infinity zone so the singularity is handled gracefully
-    const nearInfinity = Math.abs(doDistance - f) < 3;
+    // Widen the near-infinity zone so the singularity is handled gracefully.
+    // Use a relative threshold: within 5% of f, or absolute 3mm, whichever is larger.
+    const nearInfinityThreshold = Math.max(3, f * 0.05);
+    const nearInfinity = Math.abs(doDistance - f) < nearInfinityThreshold;
     const di = nearInfinity ? Number.POSITIVE_INFINITY : diRaw;
     const imgType = nearInfinity ? 'infinity' : imageType(di);
     const mag = magnification(diRaw, doDistance);
@@ -128,10 +130,28 @@ export class ThinLensPanel extends BasePanel {
 
     // --- Eye position adapts to regime ---
     // In HMD mode, place eye further right so the HMD outline has room
-    const eyeWorldX = doDistance < f ? Math.max(80, f * 0.8) : 60;
+    const eyeWorldX = doDistance < f ? Math.max(80, f * 0.6) : 60;
 
     const tipWorld = { x: -doDistance, y: objectHeight };
     const lensWorld = { x: 0, y: 0 };
+
+    // --- Compute ray 3's intersection with the lens plane ---
+    // Ray 3 aims from the object tip toward the front focal point (-f, 0).
+    // When d_o is close to f, slope3 diverges and yAtLens becomes huge.
+    // Only clamp when in the near-infinity zone (singularity); in normal
+    // HMD/projector regimes let the true value through so backward extensions
+    // and the virtual-image arrow stay consistent with forward rays.
+    const maxYAtLens = objectHeight * 5;
+    let ray3YAtLens = tipWorld.y; // fallback
+    if (imgType !== 'infinity') {
+      const denom = -f - tipWorld.x; // = -f + d_o = d_o - f
+      if (Math.abs(denom) > 0.01) {
+        const slope3 = (0 - tipWorld.y) / denom;
+        ray3YAtLens = tipWorld.y + slope3 * (0 - tipWorld.x);
+        // Only clamp near the singularity zone to keep the diagram readable
+        ray3YAtLens = Math.max(-maxYAtLens, Math.min(maxYAtLens, ray3YAtLens));
+      }
+    }
 
     // Collect y-values where rays cross the lens plane (x=0)
     const rayYsAtLens: number[] = [];
@@ -143,16 +163,35 @@ export class ThinLensPanel extends BasePanel {
     } else {
       rayYsAtLens.push(tipWorld.y);
       rayYsAtLens.push(lensWorld.y);
-      const slope3 = (0 - tipWorld.y) / (-f - tipWorld.x);
-      const yAtLens = tipWorld.y + slope3 * (0 - tipWorld.x);
-      rayYsAtLens.push(yAtLens);
+      rayYsAtLens.push(ray3YAtLens);
     }
 
     // Lens height: encompass ray intersections but CAP to prevent giant lens
     const maxRayY = Math.max(...rayYsAtLens.map(Math.abs));
-    // Cap lens half-height: minimum 40, grows with rays but max ~120 world units
-    const lensHalfHeight = Math.min(Math.max(maxRayY + 12, 40), 120);
+    // Cap lens half-height: minimum 40, grows with rays but max ~80 world units
+    const lensHalfHeight = Math.min(Math.max(maxRayY + 12, 40), 80);
     const lensHeight = lensHalfHeight * 2;
+
+    // --- Clamp magnification for drawing purposes ---
+    // Near singularity, mag can be huge. Cap to keep image arrow reasonable.
+    const maxDrawMag = 6;
+    const drawMag = Math.max(-maxDrawMag, Math.min(maxDrawMag, mag));
+    const drawImageHeight = objectHeight * drawMag;
+
+    // --- Image clamping thresholds ---
+    // Determine whether images (real or virtual) are too far to show at true position.
+    // Use generous limits so images are shown at true position when possible,
+    // but clamp when they would blow up the viewport.
+    const maxRealExtent = Math.max(doDistance * 5, f * 5, 500);
+    const maxVirtualExtent = Math.max(doDistance * 2.5, f * 2, 350);
+    const virtualImageClamped = imgType === 'virtual' && Math.abs(diRaw) > maxVirtualExtent;
+    const realImageClamped = imgType === 'real' && diRaw > maxRealExtent;
+
+    // Compute the effective image height used for drawing (clamped for off-viewport images)
+    const clampedImageMag = (virtualImageClamped || realImageClamped)
+      ? Math.sign(drawMag) * Math.min(Math.abs(drawMag), 3)
+      : drawMag;
+    const clampedImageHeight = objectHeight * clampedImageMag;
 
     // --- Fixed viewport approach to prevent chaotic auto-zoom ---
     // Instead of computing from all scene points (which causes issues near singularity),
@@ -163,17 +202,14 @@ export class ThinLensPanel extends BasePanel {
     const anchorMinX = -doDistance - 30; // display with margin
     const anchorMaxX = eyeWorldX + 30;   // eye with margin
 
-    // Secondary: include image position if it's within a reasonable range
+    // Secondary: include image position only if within reasonable range
     let effectiveMaxX = anchorMaxX;
     let effectiveMinX = anchorMinX;
     if (imgType !== 'infinity') {
       const imageX = diRaw;
-      // Only expand viewport for images within 5x the display distance
-      const maxReasonableX = Math.max(doDistance * 5, 400);
-      if (imageX > 0 && imageX < maxReasonableX) {
+      if (imgType === 'real' && imageX > 0 && !realImageClamped) {
         effectiveMaxX = Math.max(effectiveMaxX, imageX + 30);
-      }
-      if (imageX < 0 && imageX > -maxReasonableX) {
+      } else if (imgType === 'virtual' && imageX < 0 && !virtualImageClamped) {
         effectiveMinX = Math.min(effectiveMinX, imageX - 30);
       }
     }
@@ -182,8 +218,10 @@ export class ThinLensPanel extends BasePanel {
     effectiveMinX = Math.min(effectiveMinX, -f - 10);
     effectiveMaxX = Math.max(effectiveMaxX, f + 10);
 
-    // Y bounds: based on display height and lens, not diverging rays
-    const sceneHalfY = Math.max(displayHalfH + 20, lensHalfHeight + 10, 80);
+    // Y bounds: use the clamped image height (not raw drawImageHeight) to avoid
+    // wasting vertical space when the image arrow is capped
+    const imageHalfY = Math.abs(clampedImageHeight) + 10;
+    const sceneHalfY = Math.max(displayHalfH + 20, lensHalfHeight + 10, imageHalfY, 80);
 
     let worldMinX = effectiveMinX;
     let worldMaxX = effectiveMaxX;
@@ -303,9 +341,14 @@ export class ThinLensPanel extends BasePanel {
       const narrowEnd = lensCanvasH + 10;
       drawProjector(ctx, pLeft.x, lensPos.y, wideEnd, narrowEnd, bodyW);
     } else if (doDistance < f) {
-      // HMD outline: ensure minimum canvas-pixel size for visibility
-      const hmdLeft = worldToCanvas(-doDistance - 20, displayHalfH + 20);
-      const hmdRight = worldToCanvas(eyeWorldX + 30, -(displayHalfH + 20));
+      // HMD outline: use fixed canvas-pixel proportions so it doesn't blow up
+      // when the viewport expands for large virtual image distances.
+      // The HMD should enclose: display (left), lens (center), eye (right).
+      const hmdLeftWorld = -doDistance - 15;
+      const hmdRightWorld = eyeWorldX + 20;
+      const hmdTopWorld = Math.max(displayHalfH, lensHalfHeight) + 10;
+      const hmdLeft = worldToCanvas(hmdLeftWorld, hmdTopWorld);
+      const hmdRight = worldToCanvas(hmdRightWorld, -hmdTopWorld);
       let hmdW = hmdRight.x - hmdLeft.x;
       let hmdH = hmdRight.y - hmdLeft.y; // canvas y is inverted
       // Enforce minimum HMD outline size (at least 120x80 canvas pixels)
@@ -403,14 +446,38 @@ export class ThinLensPanel extends BasePanel {
     });
 
     // --- Image ---
+    // Compute the drawn image position (clamped for off-viewport images).
+    // These are hoisted here so backward extension lines can reference them.
+    const clampMargin = (xMax - xMin) * 0.05;
+    let drawImageX = diRaw;
+    let clampedDrawHeight = drawImageHeight;
     if (imgType !== 'infinity') {
-      const imageHeight = objectHeight * mag;
-      const imageX = diRaw;
-      // Clamp image drawing position for extreme values
-      const drawImageX = Math.max(xMin, Math.min(xMax, imageX));
-      const drawImageH = Math.max(-300, Math.min(300, imageHeight));
+      drawImageX = virtualImageClamped
+        ? xMin + clampMargin
+        : realImageClamped
+          ? xMax - clampMargin
+          : Math.max(xMin + clampMargin, Math.min(xMax - clampMargin, diRaw));
+      if (virtualImageClamped) {
+        // When virtual image is clamped to viewport edge, compute the arrow
+        // height at that position from the convergence of backward-extended rays.
+        // Use Ray 1 slope: exits (0, objectHeight) with slope -objectHeight/f
+        // and Ray 2 slope: exits (0, 0) with slope objectHeight/doDistance.
+        // At the clamped x, these give different y, so average them for a
+        // representative arrow. Cap height to prevent dominating the viewport.
+        const r1Slope = -objectHeight / f;
+        const r2Slope = objectHeight / doDistance;
+        const r1Y = objectHeight + r1Slope * drawImageX;
+        const r2Y = r2Slope * drawImageX;
+        const avgY = (r1Y + r2Y) / 2;
+        const maxDrawH = objectHeight * 4;
+        clampedDrawHeight = Math.max(-maxDrawH, Math.min(maxDrawH, avgY));
+      } else if (realImageClamped) {
+        clampedDrawHeight = objectHeight * Math.sign(drawMag) * Math.min(Math.abs(drawMag), 3);
+      } else {
+        clampedDrawHeight = drawImageHeight;
+      }
       const imageBase = worldToCanvas(drawImageX, 0);
-      const imageTip = worldToCanvas(drawImageX, drawImageH);
+      const imageTip = worldToCanvas(drawImageX, clampedDrawHeight);
       if (imgType === 'virtual') {
         drawDashedLine(
           ctx,
@@ -425,11 +492,29 @@ export class ThinLensPanel extends BasePanel {
           width: 2,
           headSize: 6,
         });
+        // If clamped, draw a "..." indicator and arrow pointing further left
+        if (virtualImageClamped) {
+          const indX = imageBase.x - 8;
+          drawLabel(ctx, '\u2190 ' + diRaw.toFixed(0) + 'mm', indX, imageBase.y - 18, {
+            color: COLORS.virtualImage,
+            background: 'rgba(168, 85, 247, 0.3)',
+            font: '10px "Space Grotesk", system-ui, sans-serif',
+          });
+        }
       } else {
         drawArrow(ctx, imageBase.x, imageBase.y, imageTip.x, imageTip.y, {
           color: COLORS.rayGreen,
           width: 2.5,
         });
+        // If real image is clamped, draw an indicator showing true distance
+        if (realImageClamped) {
+          const indX = imageBase.x + 8;
+          drawLabel(ctx, '\u2192 ' + diRaw.toFixed(0) + 'mm', indX, imageBase.y - 18, {
+            color: COLORS.rayGreen,
+            background: 'rgba(76, 175, 80, 0.3)',
+            font: '10px "Space Grotesk", system-ui, sans-serif',
+          });
+        }
       }
       const imgLabelText = imgType === 'virtual' ? 'Virtual Image' : 'Real Image';
       const imgLS = measureLabel(imgLabelText);
@@ -482,6 +567,7 @@ export class ThinLensPanel extends BasePanel {
         COLORS.rayGreen
       );
     } else {
+      // Ray 1: parallel to axis, then through back focal point f'
       const slope1 = -tipWorld.y / f;
       const ray1End = { x: farX, y: tipWorld.y + slope1 * farX };
       drawWorldRay(
@@ -494,6 +580,7 @@ export class ThinLensPanel extends BasePanel {
         COLORS.rayLeft
       );
 
+      // Ray 2: through lens center, continues undeviated
       const slope2 = (lensWorld.y - tipWorld.y) / (lensWorld.x - tipWorld.x);
       const ray2End = { x: farX, y: lensWorld.y + slope2 * farX };
       drawWorldRay(
@@ -506,34 +593,53 @@ export class ThinLensPanel extends BasePanel {
         COLORS.rayYellow
       );
 
-      const slope3 = (0 - tipWorld.y) / (-f - tipWorld.x);
-      const yAtLens = tipWorld.y + slope3 * (0 - tipWorld.x);
-      const ray3End = { x: farX, y: yAtLens };
+      // Ray 3: through front focal point, exits parallel to axis
+      // Uses the pre-clamped ray3YAtLens computed earlier
+      const ray3End = { x: farX, y: ray3YAtLens };
       drawWorldRay(
         [
           { x: tipWorld.x, y: tipWorld.y },
-          { x: 0, y: yAtLens },
+          { x: 0, y: ray3YAtLens },
           { x: ray3End.x, y: ray3End.y },
         ],
         undefined,
         COLORS.rayGreen
       );
 
+      // Virtual image backward extensions: trace each refracted ray backward
+      // along its TRUE physical slope from the lens exit point. This ensures
+      // convergence at the correct virtual image position even when the drawn
+      // image arrow is clamped for viewport reasons.
       if (imgType === 'virtual') {
-        const clampedDi = Math.max(-2000, Math.min(2000, diRaw));
-        const clampedMag = Math.max(-20, Math.min(20, mag));
-        const imagePoint = { x: clampedDi, y: objectHeight * clampedMag };
+        // Compute each refracted ray's slope after the lens, then trace backward.
+        // Ray 1: enters at (0, objectHeight), refracted slope = -objectHeight/f
+        const ray1Slope = -tipWorld.y / f;
+        // Ray 2: through center, undeviated slope = tipWorld.y / (-tipWorld.x) = objectHeight / doDistance
+        const ray2Slope = (lensWorld.y - tipWorld.y) / (lensWorld.x - tipWorld.x);
+
+        // Extend each backward from lens exit to left viewport edge
+        const extentX = xMin;
+
+        // Ray 1: from (0, objectHeight) backward
+        const ray1ExtY = tipWorld.y + ray1Slope * extentX;
         drawWorldRay([
           { x: 0, y: tipWorld.y },
-          imagePoint,
+          { x: extentX, y: ray1ExtY },
         ], [6, 6], COLORS.virtualImage);
+
+        // Ray 2: from (0, 0) backward
+        const ray2ExtY = lensWorld.y + ray2Slope * extentX;
         drawWorldRay([
           { x: 0, y: lensWorld.y },
-          imagePoint,
+          { x: extentX, y: ray2ExtY },
         ], [6, 6], COLORS.virtualImage);
+
+        // Ray 3: exits parallel to axis at y = ray3YAtLens.
+        // Backward extension is horizontal at the SAME y used for the forward ray,
+        // ensuring visual continuity at the lens plane.
         drawWorldRay([
-          { x: 0, y: yAtLens },
-          imagePoint,
+          { x: 0, y: ray3YAtLens },
+          { x: extentX, y: ray3YAtLens },
         ], [6, 6], COLORS.virtualImage);
       }
     }
@@ -561,10 +667,13 @@ export class ThinLensPanel extends BasePanel {
         background: 'rgba(77,166,255,0.18)',
       });
     } else if (doDistance < f) {
-      const hmdLeft = worldToCanvas(-doDistance - 20, displayHalfH + 20);
-      const hmdRight = worldToCanvas(eyeWorldX + 30, -(displayHalfH + 20));
+      const hmdLeftWorld = -doDistance - 15;
+      const hmdRightWorld = eyeWorldX + 20;
+      const hmdTopWorld = Math.max(displayHalfH, lensHalfHeight) + 10;
+      const hmdLabelLeft = worldToCanvas(hmdLeftWorld, hmdTopWorld);
+      const hmdLabelRight = worldToCanvas(hmdRightWorld, -hmdTopWorld);
       const hmdLS = measureLabel('HMD');
-      const hmdLP = labels.place((hmdLeft.x + hmdRight.x) / 2, hmdLeft.y - 12, hmdLS.w, hmdLS.h);
+      const hmdLP = labels.place((hmdLabelLeft.x + hmdLabelRight.x) / 2, hmdLabelLeft.y - 12, hmdLS.w, hmdLS.h);
       drawLabel(ctx, 'HMD', hmdLP.x, hmdLP.y, {
         color: '#e94560',
         background: 'rgba(233,69,96,0.18)',
