@@ -16,6 +16,18 @@ import { imageDistance, imageType, magnification } from '../optics-math';
 import type { Point } from '../types';
 import { BasePanel } from '../ui-controls';
 
+/** Describes a drawn ray for tooltip hit-testing. */
+interface RayHitZone {
+  /** Canvas-space line segments forming this ray. */
+  segments: [Point, Point][];
+  /** Short display name for the ray. */
+  title: string;
+  /** Explanation shown in the tooltip body. */
+  description: string;
+  /** CSS color for the swatch dot. */
+  color: string;
+}
+
 /**
  * Label placement helper: tracks placed label bounding boxes and nudges
  * new labels so they don't overlap previous ones.
@@ -104,6 +116,9 @@ class LabelPlacer {
 export class ThinLensPanel extends BasePanel {
   private fInput: HTMLInputElement;
   private doInput: HTMLInputElement;
+  private rayHitZones: RayHitZone[] = [];
+  private tooltipEl: HTMLElement | null = null;
+  private tooltipTimeout: number | null = null;
 
   constructor(container: HTMLElement) {
     super(container);
@@ -128,6 +143,97 @@ export class ThinLensPanel extends BasePanel {
     this.addReadout({ id: 'thin-lens-di', label: 'Image Distance', unit: 'mm' });
     this.addReadout({ id: 'thin-lens-m', label: 'Magnification', unit: 'x' });
     this.addReadout({ id: 'thin-lens-regime', label: 'Regime', unit: '' });
+
+    this.tooltipEl = document.getElementById('ray-tooltip');
+    this.initTooltipListeners();
+  }
+
+  /** Set up pointer and touch listeners for ray tooltips. */
+  private initTooltipListeners(): void {
+    const canvas = this.canvas;
+
+    // Pointer move (covers mouse + stylus + touch-with-pointer)
+    canvas.addEventListener('pointermove', (e: PointerEvent) => {
+      this.handlePointerAt(e.clientX, e.clientY);
+    });
+
+    canvas.addEventListener('pointerleave', () => {
+      this.hideTooltip();
+    });
+
+    // Touch: show tooltip on touchstart, hide on touchend
+    canvas.addEventListener('touchstart', (e: TouchEvent) => {
+      if (e.touches.length > 0) {
+        const t = e.touches[0];
+        this.handlePointerAt(t.clientX, t.clientY);
+      }
+    }, { passive: true });
+
+    canvas.addEventListener('touchend', () => {
+      // Keep tooltip visible briefly then hide
+      if (this.tooltipTimeout !== null) window.clearTimeout(this.tooltipTimeout);
+      this.tooltipTimeout = window.setTimeout(() => this.hideTooltip(), 1200);
+    }, { passive: true });
+  }
+
+  /** Test pointer position against ray segments and show/hide tooltip. */
+  private handlePointerAt(clientX: number, clientY: number): void {
+    const rect = this.canvas.getBoundingClientRect();
+    const cx = clientX - rect.left;
+    const cy = clientY - rect.top;
+
+    const HIT_DIST = 10; // pixel tolerance
+    let hitIdx = -1;
+
+    for (let i = 0; i < this.rayHitZones.length; i++) {
+      const zone = this.rayHitZones[i];
+      for (const [a, b] of zone.segments) {
+        if (distToSegment(cx, cy, a.x, a.y, b.x, b.y) < HIT_DIST) {
+          hitIdx = i;
+          break;
+        }
+      }
+      if (hitIdx >= 0) break;
+    }
+
+    if (hitIdx >= 0) {
+      this.showTooltip(hitIdx, clientX, clientY);
+    } else {
+      this.hideTooltip();
+    }
+  }
+
+  private showTooltip(idx: number, clientX: number, clientY: number): void {
+    if (!this.tooltipEl) return;
+    const zone = this.rayHitZones[idx];
+    if (!zone) return;
+    if (this.tooltipTimeout !== null) {
+      window.clearTimeout(this.tooltipTimeout);
+      this.tooltipTimeout = null;
+    }
+    // track active ray (used to avoid redundant updates)
+    this.tooltipEl.innerHTML =
+      `<div class="tooltip-title"><span class="tooltip-swatch" style="background:${zone.color}"></span>${zone.title}</div>` +
+      `<div>${zone.description}</div>`;
+    this.tooltipEl.setAttribute('aria-hidden', 'false');
+
+    // Position: offset from cursor, keep on screen
+    const pad = 14;
+    let tx = clientX + pad;
+    let ty = clientY + pad;
+    const tw = this.tooltipEl.offsetWidth || 200;
+    const th = this.tooltipEl.offsetHeight || 60;
+    if (tx + tw > window.innerWidth - 8) tx = clientX - tw - pad;
+    if (ty + th > window.innerHeight - 8) ty = clientY - th - pad;
+    if (tx < 4) tx = 4;
+    if (ty < 4) ty = 4;
+    this.tooltipEl.style.left = tx + 'px';
+    this.tooltipEl.style.top = ty + 'px';
+  }
+
+  private hideTooltip(): void {
+    if (!this.tooltipEl) return;
+    this.tooltipEl.setAttribute('aria-hidden', 'true');
   }
 
   render(): void {
@@ -510,73 +616,96 @@ export class ThinLensPanel extends BasePanel {
     }
 
     // --- Principal rays ---
+    // Reset hit zones for tooltip hit-testing
+    const newHitZones: RayHitZone[] = [];
+
     if (imgType === 'infinity') {
-      drawWorldRay(
-        [
-          { x: tipWorld.x, y: tipWorld.y },
-          { x: lensWorld.x, y: tipWorld.y },
-          { x: farX, y: tipWorld.y },
-        ],
-        undefined,
-        COLORS.rayLeft
-      );
-      drawWorldRay(
-        [
-          { x: tipWorld.x, y: tipWorld.y },
-          { x: lensWorld.x, y: 0 },
-          { x: farX, y: (tipWorld.y / doDistance) * farX * -1 },
-        ],
-        undefined,
-        COLORS.rayYellow
-      );
-      drawWorldRay(
-        [
-          { x: tipWorld.x, y: tipWorld.y },
-          { x: 0, y: tipWorld.y },
-          { x: farX, y: tipWorld.y },
-        ],
-        undefined,
-        COLORS.rayGreen
-      );
+      const r1pts: Point[] = [
+        { x: tipWorld.x, y: tipWorld.y },
+        { x: lensWorld.x, y: tipWorld.y },
+        { x: farX, y: tipWorld.y },
+      ];
+      drawWorldRay(r1pts, undefined, COLORS.rayLeft);
+      newHitZones.push({
+        segments: worldPairsToCanvas(r1pts, worldToCanvas),
+        title: 'Ray 1: Parallel Ray',
+        description: 'Travels parallel to the optical axis from the object tip to the lens, then refracts through the back focal point.',
+        color: COLORS.rayLeft,
+      });
+
+      const r2pts: Point[] = [
+        { x: tipWorld.x, y: tipWorld.y },
+        { x: lensWorld.x, y: 0 },
+        { x: farX, y: (tipWorld.y / doDistance) * farX * -1 },
+      ];
+      drawWorldRay(r2pts, undefined, COLORS.rayYellow);
+      newHitZones.push({
+        segments: worldPairsToCanvas(r2pts, worldToCanvas),
+        title: 'Ray 2: Central Ray',
+        description: 'Passes straight through the center of the lens without bending, since the lens is thin.',
+        color: COLORS.rayYellow,
+      });
+
+      const r3pts: Point[] = [
+        { x: tipWorld.x, y: tipWorld.y },
+        { x: 0, y: tipWorld.y },
+        { x: farX, y: tipWorld.y },
+      ];
+      drawWorldRay(r3pts, undefined, COLORS.rayGreen);
+      newHitZones.push({
+        segments: worldPairsToCanvas(r3pts, worldToCanvas),
+        title: 'Ray 3: Focal Ray',
+        description: 'Aimed toward the front focal point before the lens; after refraction, exits parallel to the axis.',
+        color: COLORS.rayGreen,
+      });
     } else {
       // Ray 1: parallel to axis, then through back focal point f'
       const slope1 = -tipWorld.y / f;
       const ray1End = { x: farX, y: tipWorld.y + slope1 * farX };
-      drawWorldRay(
-        [
-          { x: tipWorld.x, y: tipWorld.y },
-          { x: 0, y: tipWorld.y },
-          { x: ray1End.x, y: ray1End.y },
-        ],
-        undefined,
-        COLORS.rayLeft
-      );
+      const r1pts: Point[] = [
+        { x: tipWorld.x, y: tipWorld.y },
+        { x: 0, y: tipWorld.y },
+        { x: ray1End.x, y: ray1End.y },
+      ];
+      drawWorldRay(r1pts, undefined, COLORS.rayLeft);
+      newHitZones.push({
+        segments: worldPairsToCanvas(r1pts, worldToCanvas),
+        title: 'Ray 1: Parallel Ray',
+        description: 'Travels parallel to the optical axis, then refracts through the back focal point (f\u2032). Used to locate where the image forms.',
+        color: COLORS.rayLeft,
+      });
 
       // Ray 2: through lens center, continues undeviated
       const slope2 = (lensWorld.y - tipWorld.y) / (lensWorld.x - tipWorld.x);
       const ray2End = { x: farX, y: lensWorld.y + slope2 * farX };
-      drawWorldRay(
-        [
-          { x: tipWorld.x, y: tipWorld.y },
-          { x: lensWorld.x, y: lensWorld.y },
-          { x: ray2End.x, y: ray2End.y },
-        ],
-        undefined,
-        COLORS.rayYellow
-      );
+      const r2pts: Point[] = [
+        { x: tipWorld.x, y: tipWorld.y },
+        { x: lensWorld.x, y: lensWorld.y },
+        { x: ray2End.x, y: ray2End.y },
+      ];
+      drawWorldRay(r2pts, undefined, COLORS.rayYellow);
+      newHitZones.push({
+        segments: worldPairsToCanvas(r2pts, worldToCanvas),
+        title: 'Ray 2: Central Ray',
+        description: 'Passes through the lens center undeviated. In a thin lens, the two refractions cancel out so this ray continues in a straight line.',
+        color: COLORS.rayYellow,
+      });
 
       // Ray 3: through front focal point, exits parallel to axis
       // Uses the pre-clamped ray3YAtLens computed earlier
       const ray3End = { x: farX, y: ray3YAtLens };
-      drawWorldRay(
-        [
-          { x: tipWorld.x, y: tipWorld.y },
-          { x: 0, y: ray3YAtLens },
-          { x: ray3End.x, y: ray3End.y },
-        ],
-        undefined,
-        COLORS.rayGreen
-      );
+      const r3pts: Point[] = [
+        { x: tipWorld.x, y: tipWorld.y },
+        { x: 0, y: ray3YAtLens },
+        { x: ray3End.x, y: ray3End.y },
+      ];
+      drawWorldRay(r3pts, undefined, COLORS.rayGreen);
+      newHitZones.push({
+        segments: worldPairsToCanvas(r3pts, worldToCanvas),
+        title: 'Ray 3: Focal Ray',
+        description: 'Passes through (or aims toward) the front focal point (f), then exits the lens parallel to the optical axis.',
+        color: COLORS.rayGreen,
+      });
 
       // Virtual image backward extensions: trace each refracted ray backward
       // along its TRUE physical slope from the lens exit point. This ensures
@@ -615,6 +744,9 @@ export class ThinLensPanel extends BasePanel {
         ], [6, 6], COLORS.virtualImage);
       }
     }
+
+    // Store hit zones for tooltip interaction
+    this.rayHitZones = newHitZones;
 
     // --- Eye (always on right) ---
     const eyePos = worldToCanvas(eyeWorldX, 0);
@@ -713,4 +845,34 @@ export class ThinLensPanel extends BasePanel {
       font: '11px "Space Grotesk", system-ui, sans-serif',
     });
   }
+}
+
+/**
+ * Convert an array of world-space points into consecutive canvas-space
+ * line-segment pairs suitable for hit-testing.
+ */
+function worldPairsToCanvas(
+  pts: Point[],
+  toCanvas: (x: number, y: number) => Point
+): [Point, Point][] {
+  const pairs: [Point, Point][] = [];
+  for (let i = 0; i < pts.length - 1; i++) {
+    pairs.push([toCanvas(pts[i].x, pts[i].y), toCanvas(pts[i + 1].x, pts[i + 1].y)]);
+  }
+  return pairs;
+}
+
+/** Minimum distance from point (px,py) to line segment (ax,ay)-(bx,by). */
+function distToSegment(
+  px: number, py: number,
+  ax: number, ay: number,
+  bx: number, by: number
+): number {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq === 0) return Math.hypot(px - ax, py - ay);
+  let t = ((px - ax) * dx + (py - ay) * dy) / lenSq;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
 }

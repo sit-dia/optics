@@ -26,6 +26,18 @@
     </header>
 
     <main class="page" id="app">
+      <div class="intro-blurb">
+        <p>
+          Explore how lenses form images in VR headsets and projectors.
+          Drag the sliders to change the focal length and lens-to-display distance,
+          and watch the three principal rays update in real time.
+          Hover over any ray to learn what it represents.
+          Part of the
+          <a href="https://www.youtube.com/channel/UCpyKtjkfy819tJyHT-mQm0A" target="_blank" rel="noreferrer">Immersification</a>
+          series on immersive technology education.
+        </p>
+      </div>
+
       <section class="panel" id="thin-lens" data-panel="thin-lens">
         <div class="panel-title">VR Optics Explorer</div>
         <div class="panel-body">
@@ -37,11 +49,10 @@
 
       <footer class="site-footer">
         <span>Optics Explorer for DIA @ SIT.</span>
-        <a href="https://hmd.diaversity.org" target="_blank" rel="noreferrer"
-          >HMD Simulator</a
-        >
       </footer>
     </main>
+
+    <div class="ray-tooltip" id="ray-tooltip" aria-hidden="true"></div>
 
     <script type="module" src="/src/main.ts"></script>
   </body>

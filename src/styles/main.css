@@ -253,6 +253,71 @@ a {
   font-weight: 600;
 }
 
+/* Intro blurb */
+.intro-blurb {
+  margin-bottom: 12px;
+  padding: 12px 16px;
+  background: rgba(178, 114, 255, 0.06);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+
+.intro-blurb p {
+  margin: 0;
+}
+
+.intro-blurb a {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.intro-blurb a:hover {
+  color: #fff;
+}
+
+/* Ray tooltip */
+.ray-tooltip {
+  position: fixed;
+  z-index: 100;
+  pointer-events: none;
+  max-width: 260px;
+  padding: 8px 12px;
+  background: rgba(22, 22, 44, 0.95);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--text);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.ray-tooltip[aria-hidden="false"] {
+  opacity: 1;
+}
+
+.ray-tooltip .tooltip-title {
+  font-weight: 700;
+  margin-bottom: 3px;
+}
+
+.ray-tooltip .tooltip-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-right: 5px;
+  vertical-align: middle;
+}
+
 @media (max-width: 768px) {
   .site-header {
     padding-left: 28px;
