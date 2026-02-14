@@ -8,9 +8,11 @@ import {
   drawHMD,
   drawLabel,
   drawLens,
+  drawMathLabel,
   drawProjector,
   drawRay,
 } from '../canvas-utils';
+import type { MathSegment } from '../canvas-utils';
 import { COLORS } from '../constants';
 import { imageDistance, imageType, magnification } from '../optics-math';
 import type { Point } from '../types';
@@ -124,7 +126,7 @@ export class ThinLensPanel extends BasePanel {
     super(container);
     this.fInput = this.addSlider({
       id: 'thin-lens-f',
-      label: 'Focal Length (mm)',
+      label: 'Focal length f (mm)',
       min: 10,
       max: 200,
       step: 1,
@@ -133,15 +135,15 @@ export class ThinLensPanel extends BasePanel {
     });
     this.doInput = this.addSlider({
       id: 'thin-lens-do',
-      label: 'Lens-to-Display Distance (mm)',
+      label: 'Object distance d\u2092 (mm)',
       min: 5,
       max: 500,
       step: 1,
       value: 100,
       unit: 'mm',
     });
-    this.addReadout({ id: 'thin-lens-di', label: 'Image Distance', unit: 'mm' });
-    this.addReadout({ id: 'thin-lens-m', label: 'Magnification', unit: 'x' });
+    this.addReadout({ id: 'thin-lens-di', label: 'Image distance d\u1d62', unit: 'mm' });
+    this.addReadout({ id: 'thin-lens-m', label: 'Magnification M', unit: 'x' });
     this.addReadout({ id: 'thin-lens-regime', label: 'Regime', unit: '' });
 
     this.tooltipEl = document.getElementById('ray-tooltip');
@@ -425,14 +427,16 @@ export class ThinLensPanel extends BasePanel {
     });
 
     // --- Light direction arrow across top ---
-    const arrowLeft = worldToCanvas(xMin + (xMax - xMin) * 0.05, yMax - (yMax - yMin) * 0.08);
-    const arrowRight = worldToCanvas(xMax - (xMax - xMin) * 0.05, yMax - (yMax - yMin) * 0.08);
+    // Place well above the scene to avoid overlap with HMD/Projector labels
+    const lightDirYFraction = 0.04; // closer to top edge
+    const arrowLeft = worldToCanvas(xMin + (xMax - xMin) * 0.05, yMax - (yMax - yMin) * lightDirYFraction);
+    const arrowRight = worldToCanvas(xMax - (xMax - xMin) * 0.05, yMax - (yMax - yMin) * lightDirYFraction);
     drawArrow(ctx, arrowLeft.x, arrowLeft.y, arrowRight.x, arrowRight.y, {
       color: 'rgba(255,255,255,0.18)',
       width: 1.5,
       headSize: 8,
     });
-    drawLabel(ctx, 'light direction \u2192', (arrowLeft.x + arrowRight.x) / 2, arrowLeft.y - 10, {
+    drawLabel(ctx, 'Light direction \u2192', (arrowLeft.x + arrowRight.x) / 2, arrowLeft.y - 10, {
       color: 'rgba(255,255,255,0.35)',
       background: 'transparent',
     });
@@ -505,7 +509,7 @@ export class ThinLensPanel extends BasePanel {
     const focalLeft = worldToCanvas(-f, 0);
     const focalRight = worldToCanvas(f, 0);
     const focalTickHalf = 10;
-    const focalFont = 'italic 11px "Space Grotesk", system-ui, sans-serif';
+    const focalFont = 'italic 12px "Times New Roman", Georgia, serif';
     ctx.save();
     ctx.strokeStyle = COLORS.lens;
     ctx.lineWidth = 2;
@@ -610,7 +614,9 @@ export class ThinLensPanel extends BasePanel {
       }
       // Edge glow and labels are drawn AFTER all other scene elements (see below)
     } else {
-      drawLabel(ctx, 'Image at \u221e', lensPos.x + 90, lensPos.y - 40, {
+      const infLS = measureLabel('Image at \u221e');
+      const infLP = labels.place(lensPos.x + 90, lensPos.y - 40, infLS.w, infLS.h);
+      drawLabel(ctx, 'Image at \u221e', infLP.x, infLP.y, {
         background: 'rgba(255, 255, 255, 0.08)',
       });
     }
@@ -711,7 +717,9 @@ export class ThinLensPanel extends BasePanel {
       // along its TRUE physical slope from the lens exit point. This ensures
       // convergence at the correct virtual image position even when the drawn
       // image arrow is clamped for viewport reasons.
+      // Use subtler styling so extensions don't dominate the diagram.
       if (imgType === 'virtual') {
+        const virtualExtColor = 'rgba(168, 85, 247, 0.35)'; // dimmer purple
         // Compute each refracted ray's slope after the lens, then trace backward.
         // Ray 1: enters at (0, objectHeight), refracted slope = -objectHeight/f
         const ray1Slope = -tipWorld.y / f;
@@ -726,14 +734,14 @@ export class ThinLensPanel extends BasePanel {
         drawWorldRay([
           { x: 0, y: tipWorld.y },
           { x: extentX, y: ray1ExtY },
-        ], [6, 6], COLORS.virtualImage);
+        ], [6, 6], virtualExtColor);
 
         // Ray 2: from (0, 0) backward
         const ray2ExtY = lensWorld.y + ray2Slope * extentX;
         drawWorldRay([
           { x: 0, y: lensWorld.y },
           { x: extentX, y: ray2ExtY },
-        ], [6, 6], COLORS.virtualImage);
+        ], [6, 6], virtualExtColor);
 
         // Ray 3: exits parallel to axis at y = ray3YAtLens.
         // Backward extension is horizontal at the SAME y used for the forward ray,
@@ -741,7 +749,7 @@ export class ThinLensPanel extends BasePanel {
         drawWorldRay([
           { x: 0, y: ray3YAtLens },
           { x: extentX, y: ray3YAtLens },
-        ], [6, 6], COLORS.virtualImage);
+        ], [6, 6], virtualExtColor);
       }
     }
 
@@ -751,7 +759,7 @@ export class ThinLensPanel extends BasePanel {
     // --- Eye (always on right) ---
     const eyePos = worldToCanvas(eyeWorldX, 0);
     const eyeRotation = doDistance < f ? Math.PI : 0;
-    drawEye(ctx, eyePos.x, eyePos.y, 14, eyeRotation);
+    drawEye(ctx, eyePos.x, eyePos.y, 22, eyeRotation);
     const eyeLS = measureLabel('Eye');
     const eyeLP = labels.place(eyePos.x, eyePos.y - 26, eyeLS.w, eyeLS.h);
     drawLabel(ctx, 'Eye', eyeLP.x, eyeLP.y, {
@@ -784,22 +792,39 @@ export class ThinLensPanel extends BasePanel {
       });
     }
 
-    // --- Regime label ---
-    const regimeLabel =
+    // --- Regime label (with math-style subscripts) ---
+    const regimeSegs: MathSegment[] =
       imgType === 'infinity'
-        ? 'd_o = f \u2192 image at \u221e'
+        ? [
+            { type: 'math', base: 'd', sub: 'o' },
+            { type: 'text', text: ' = ', base: '' },
+            { type: 'math', base: 'f', },
+            { type: 'text', text: '  \u2192  image at \u221e', base: '' },
+          ]
         : doDistance < f
-          ? 'HMD regime: d_o < f \u2192 virtual image'
-          : 'Projector regime: d_o > f \u2192 real image';
-    const regLS = measureLabel(regimeLabel);
-    const regLP = labels.place(lensPos.x, lensPos.y + 70, regLS.w, regLS.h);
-    drawLabel(ctx, regimeLabel, regLP.x, regLP.y, {
-      background:
-        doDistance < f
-          ? 'rgba(233, 69, 96, 0.2)'
-          : doDistance > f
-            ? 'rgba(77,166,255,0.15)'
-            : 'rgba(255, 255, 255, 0.08)',
+          ? [
+              { type: 'text', text: 'HMD:  ', base: '' },
+              { type: 'math', base: 'd', sub: 'o' },
+              { type: 'text', text: ' < ', base: '' },
+              { type: 'math', base: 'f' },
+              { type: 'text', text: '  \u2192  virtual image', base: '' },
+            ]
+          : [
+              { type: 'text', text: 'Projector:  ', base: '' },
+              { type: 'math', base: 'd', sub: 'o' },
+              { type: 'text', text: ' > ', base: '' },
+              { type: 'math', base: 'f' },
+              { type: 'text', text: '  \u2192  real image', base: '' },
+            ];
+    // Measure width for placement
+    const regimeBg =
+      doDistance < f
+        ? 'rgba(233, 69, 96, 0.2)'
+        : doDistance > f
+          ? 'rgba(77,166,255,0.15)'
+          : 'rgba(255, 255, 255, 0.08)';
+    drawMathLabel(ctx, regimeSegs, lensPos.x, lensPos.y + 70, {
+      background: regimeBg,
     });
 
     // --- Color-matched glow edge indicators for off-screen content ---
@@ -837,12 +862,19 @@ export class ThinLensPanel extends BasePanel {
     // --- Draw leader lines for displaced labels ---
     labels.drawLeaderLines(ctx);
 
-    // --- Equation on-canvas at bottom ---
-    const eqText = `1/f = 1/d_o + 1/d_i  \u2192  1/${f} = 1/${doDistance} + 1/${diText}`;
-    drawLabel(ctx, eqText, this.width / 2, this.height - 16, {
+    // --- Equation on-canvas at bottom (math-style) ---
+    const eqSegs: MathSegment[] = [
+      { type: 'text', text: '1/', base: '' },
+      { type: 'math', base: 'f' },
+      { type: 'text', text: ' = 1/', base: '' },
+      { type: 'math', base: 'd', sub: 'o' },
+      { type: 'text', text: ' + 1/', base: '' },
+      { type: 'math', base: 'd', sub: 'i' },
+      { type: 'text', text: `   \u2192   1/${f} = 1/${doDistance} + 1/${diText}`, base: '' },
+    ];
+    drawMathLabel(ctx, eqSegs, this.width / 2, this.height - 16, {
       color: 'rgba(255,255,255,0.6)',
       background: 'rgba(0,0,0,0.5)',
-      font: '11px "Space Grotesk", system-ui, sans-serif',
     });
   }
 }

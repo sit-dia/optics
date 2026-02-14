@@ -9,8 +9,8 @@
       name="description"
       content="Interactive VR optics explorer for DIA at SIT"
     />
-    <script type="module" crossorigin src="./assets/index-DiSwYW6r.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-C1v1YwZj.css">
+    <script type="module" crossorigin src="./assets/index-RQHK4Sz8.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-CU3r7MFv.css">
   </head>
   <body>
     <div class="dia-brand">DIAversity</div>
@@ -28,22 +28,19 @@
     </header>
 
     <main class="page" id="app">
-      <div class="intro-blurb">
-        <p>
-          Explore how lenses form images in VR headsets and projectors.
-          Drag the sliders to change the focal length and lens-to-display distance,
-          and watch the three principal rays update in real time.
-          Hover over any ray to learn what it represents.
-          <strong>Tip:</strong> Try moving the sliders until the focal length exceeds the
-          display distance (<code>f &gt; dist</code>) and observe how the regime changes.
-          Part of the
-          <a href="https://youtube.com/playlist?list=PLMKD6gDV_13-jVPNyDLUd4y6gSw0lMM-h&si=Kh13sjSln98nYRFn" target="_blank" rel="noreferrer">Immersification: developing immersive apps</a>
-          series on immersive technology education.
-        </p>
-      </div>
-
       <section class="panel" id="thin-lens" data-panel="thin-lens">
-        <div class="panel-title">VR Optics Explorer</div>
+        <div class="panel-header">
+          <h1 class="panel-title-inline">VR Optics Explorer</h1>
+          <p class="panel-intro">
+            Interactive thin-lens ray diagram. Adjust sliders to explore how
+            <span class="math-var">f</span>, <span class="math-var">d<sub>o</sub></span>,
+            and <span class="math-var">d<sub>i</sub></span> relate.
+            <strong>Tip:</strong> Set <span class="math-var">d<sub>o</sub></span> &lt; <span class="math-var">f</span> for the HMD (virtual image) regime.
+            Part of the
+            <a href="https://youtube.com/playlist?list=PLMKD6gDV_13-jVPNyDLUd4y6gSw0lMM-h&si=Kh13sjSln98nYRFn" target="_blank" rel="noreferrer">Immersification: developing immersive apps</a>
+            series.
+          </p>
+        </div>
         <div class="panel-body">
           <div class="panel-canvas" data-canvas></div>
           <div class="panel-controls" data-controls></div>

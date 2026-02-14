@@ -125,37 +125,65 @@ export function drawEye(
   radius: number,
   rotation = 0
 ): void {
-  // Side-view eyeball: circle + cornea bump showing gaze direction
-  // rotation=0 → looking right, rotation=Math.PI → looking left
+  // Anatomically-inspired side-view eye with sclera, iris, and pupil
+  // rotation=0 -> looking right, rotation=Math.PI -> looking left
   const r = radius;
   ctx.save();
   ctx.translate(cx, cy);
   ctx.rotate(rotation);
 
-  // Eyeball (circle)
-  ctx.strokeStyle = '#eaeaea';
-  ctx.lineWidth = 1.5;
-  ctx.fillStyle = 'rgba(234,234,234,0.05)';
+  // Outer eye shape (almond/lemon shape using two arcs)
+  ctx.fillStyle = 'rgba(240, 240, 245, 0.12)';
+  ctx.strokeStyle = 'rgba(234, 234, 234, 0.7)';
+  ctx.lineWidth = 1.8;
   ctx.beginPath();
-  ctx.arc(0, 0, r, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
-
-  // Cornea bump (on the right = gaze direction)
-  ctx.fillStyle = 'rgba(234,234,234,0.12)';
-  ctx.beginPath();
-  ctx.moveTo(r * 0.7, -r * 0.55);
-  ctx.quadraticCurveTo(r * 1.45, 0, r * 0.7, r * 0.55);
-  ctx.arc(0, 0, r, Math.asin(0.55), -Math.asin(0.55), true);
+  // Upper lid arc
+  ctx.moveTo(-r * 0.95, 0);
+  ctx.quadraticCurveTo(0, -r * 0.85, r * 1.1, 0);
+  // Lower lid arc
+  ctx.quadraticCurveTo(0, r * 0.75, -r * 0.95, 0);
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
 
-  // Pupil (small filled circle offset toward gaze)
-  ctx.fillStyle = '#eaeaea';
+  // Sclera (white of the eye, inner fill)
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
   ctx.beginPath();
-  ctx.arc(r * 0.75, 0, r * 0.18, 0, Math.PI * 2);
+  ctx.moveTo(-r * 0.8, 0);
+  ctx.quadraticCurveTo(0, -r * 0.65, r * 0.95, 0);
+  ctx.quadraticCurveTo(0, r * 0.55, -r * 0.8, 0);
+  ctx.closePath();
   ctx.fill();
+
+  // Iris (larger colored circle offset toward gaze direction)
+  const irisCx = r * 0.45;
+  const irisR = r * 0.38;
+  ctx.fillStyle = 'rgba(100, 160, 220, 0.35)';
+  ctx.strokeStyle = 'rgba(120, 180, 240, 0.5)';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.arc(irisCx, 0, irisR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // Pupil (dark center, larger than before)
+  ctx.fillStyle = '#181828';
+  ctx.beginPath();
+  ctx.arc(irisCx, 0, irisR * 0.52, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Pupil highlight (catchlight)
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+  ctx.beginPath();
+  ctx.arc(irisCx - irisR * 0.18, -irisR * 0.22, irisR * 0.16, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Cornea bump on right (gaze direction)
+  ctx.strokeStyle = 'rgba(200, 220, 240, 0.35)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(r * 0.7, 0, r * 0.42, -0.65, 0.65);
+  ctx.stroke();
 
   ctx.restore();
 }
@@ -474,4 +502,104 @@ export function drawLabel(
   ctx.textBaseline = 'middle';
   ctx.fillText(text, x, y + 1);
   ctx.restore();
+}
+
+/**
+ * Render a label with inline math-style subscripts.
+ * Tokens like `d_o`, `d_i` are rendered with italic serif font and subscript.
+ * Plain text is rendered normally. Segments are separated by spaces in the input.
+ *
+ * Format: Use `{var_sub}` for subscripted math variables, plain text otherwise.
+ * Example: `"{d_o} < {f}"` renders d with subscript o, then < , then italic f.
+ */
+export function drawMathLabel(
+  ctx: CanvasRenderingContext2D,
+  segments: MathSegment[],
+  x: number,
+  y: number,
+  opts: LabelOpts = {}
+): { width: number; height: number } {
+  const {
+    color = '#eaeaea',
+    background = 'rgba(0, 0, 0, 0.45)',
+    padding = 4,
+  } = opts;
+
+  const mainFont = '12px "Space Grotesk", system-ui, sans-serif';
+  const mathFont = 'italic 13px "Times New Roman", Georgia, serif';
+  const subFont = 'italic 10px "Times New Roman", Georgia, serif';
+
+  // Small horizontal padding around math segments to avoid crowding operators
+  const mathPadX = 3;
+
+  // Measure total width
+  let totalW = 0;
+  const measured: { w: number; seg: MathSegment }[] = [];
+  for (const seg of segments) {
+    ctx.save();
+    if (seg.type === 'math') {
+      ctx.font = mathFont;
+      let w = ctx.measureText(seg.base).width;
+      if (seg.sub) {
+        ctx.font = subFont;
+        w += ctx.measureText(seg.sub).width;
+      }
+      w += mathPadX * 2; // add padding on both sides of math tokens
+      measured.push({ w, seg });
+      totalW += w;
+    } else {
+      ctx.font = mainFont;
+      const w = ctx.measureText(seg.text!).width;
+      measured.push({ w, seg });
+      totalW += w;
+    }
+    ctx.restore();
+  }
+
+  const boxW = totalW + padding * 2 + 4;
+  const boxH = 18 + padding;
+
+  // Background
+  ctx.save();
+  ctx.fillStyle = background;
+  ctx.fillRect(x - boxW / 2, y - boxH / 2, boxW, boxH);
+
+  // Render segments left-to-right
+  let curX = x - totalW / 2;
+  for (const { w, seg } of measured) {
+    if (seg.type === 'math') {
+      // Offset by left padding so math vars don't crowd adjacent text
+      const drawX = curX + mathPadX;
+      ctx.font = mathFont;
+      ctx.fillStyle = color;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      const baseW = ctx.measureText(seg.base).width;
+      ctx.fillText(seg.base, drawX, y);
+      if (seg.sub) {
+        ctx.font = subFont;
+        ctx.fillText(seg.sub, drawX + baseW, y + 4);
+      }
+    } else {
+      ctx.font = mainFont;
+      ctx.fillStyle = color;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(seg.text!, curX, y + 1);
+    }
+    curX += w;
+  }
+  ctx.restore();
+  return { width: boxW, height: boxH };
+}
+
+/** A segment in a math-style label. */
+export interface MathSegment {
+  type: 'text' | 'math';
+  /** For 'text' segments */
+  text?: string;
+  /** For 'math' segments: the base variable (e.g. 'd') */
+  base: string;
+  /** For 'math' segments: the subscript (e.g. 'o') */
+  sub?: string;
 }
