@@ -2,9 +2,7 @@
 
 An interactive thin-lens optics simulator for VR/AR education. Built for the Design for Immersive Applications (DIA) module at the Singapore Institute of Technology.
 
-[![Live Demo](https://img.shields.io/badge/demo-live-green)](https://optics.diaversity.org)
-
-**Try it now: [optics.diaversity.org](https://optics.diaversity.org)**
+[![Live Demo](https://img.shields.io/badge/Live_Demo-optics.diaversity.org-blue?style=for-the-badge&logo=googlechrome&logoColor=white)](https://optics.diaversity.org)
 
 ## Features
 
