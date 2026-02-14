@@ -3,6 +3,11 @@
 An interactive thin-lens optics simulator for VR/AR education. Built for the Design for Immersive Applications (DIA) module at the Singapore Institute of Technology.
 
 [![Live Demo](https://img.shields.io/badge/Live_Demo-optics.diaversity.org-blue?style=for-the-badge&logo=googlechrome&logoColor=white)](https://optics.diaversity.org)
+[![Watch Slider Transition](https://img.shields.io/badge/Watch_Slider_Transition-mp4-red?style=for-the-badge&logo=video&logoColor=white)](docs/media/slider-transition-1280.mp4)
+
+<video src="docs/media/slider-transition-1280.mp4" width="640" autoplay loop muted>
+  Slider transition demo showing the regime change from Projector (d_o > f) to HMD (d_o < f).
+</video>
 
 ## Features
 
