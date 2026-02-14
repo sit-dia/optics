@@ -125,65 +125,37 @@ export function drawEye(
   radius: number,
   rotation = 0
 ): void {
-  // Anatomically-inspired side-view eye with sclera, iris, and pupil
+  // Side-view eyeball: circle + cornea bump showing gaze direction
   // rotation=0 -> looking right, rotation=Math.PI -> looking left
   const r = radius;
   ctx.save();
   ctx.translate(cx, cy);
   ctx.rotate(rotation);
 
-  // Outer eye shape (almond/lemon shape using two arcs)
-  ctx.fillStyle = 'rgba(240, 240, 245, 0.12)';
-  ctx.strokeStyle = 'rgba(234, 234, 234, 0.7)';
-  ctx.lineWidth = 1.8;
+  // Eyeball (circle)
+  ctx.strokeStyle = '#eaeaea';
+  ctx.lineWidth = 1.5;
+  ctx.fillStyle = 'rgba(234,234,234,0.05)';
   ctx.beginPath();
-  // Upper lid arc
-  ctx.moveTo(-r * 0.95, 0);
-  ctx.quadraticCurveTo(0, -r * 0.85, r * 1.1, 0);
-  // Lower lid arc
-  ctx.quadraticCurveTo(0, r * 0.75, -r * 0.95, 0);
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // Cornea bump (on the right = gaze direction)
+  ctx.fillStyle = 'rgba(234,234,234,0.12)';
+  ctx.beginPath();
+  ctx.moveTo(r * 0.7, -r * 0.55);
+  ctx.quadraticCurveTo(r * 1.45, 0, r * 0.7, r * 0.55);
+  ctx.arc(0, 0, r, Math.asin(0.55), -Math.asin(0.55), true);
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
 
-  // Sclera (white of the eye, inner fill)
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+  // Pupil (filled circle offset toward gaze, larger than original)
+  ctx.fillStyle = '#eaeaea';
   ctx.beginPath();
-  ctx.moveTo(-r * 0.8, 0);
-  ctx.quadraticCurveTo(0, -r * 0.65, r * 0.95, 0);
-  ctx.quadraticCurveTo(0, r * 0.55, -r * 0.8, 0);
-  ctx.closePath();
+  ctx.arc(r * 0.75, 0, r * 0.28, 0, Math.PI * 2);
   ctx.fill();
-
-  // Iris (larger colored circle offset toward gaze direction)
-  const irisCx = r * 0.45;
-  const irisR = r * 0.38;
-  ctx.fillStyle = 'rgba(100, 160, 220, 0.35)';
-  ctx.strokeStyle = 'rgba(120, 180, 240, 0.5)';
-  ctx.lineWidth = 1.2;
-  ctx.beginPath();
-  ctx.arc(irisCx, 0, irisR, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
-
-  // Pupil (dark center, larger than before)
-  ctx.fillStyle = '#181828';
-  ctx.beginPath();
-  ctx.arc(irisCx, 0, irisR * 0.52, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Pupil highlight (catchlight)
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
-  ctx.beginPath();
-  ctx.arc(irisCx - irisR * 0.18, -irisR * 0.22, irisR * 0.16, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Cornea bump on right (gaze direction)
-  ctx.strokeStyle = 'rgba(200, 220, 240, 0.35)';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.arc(r * 0.7, 0, r * 0.42, -0.65, 0.65);
-  ctx.stroke();
 
   ctx.restore();
 }
@@ -196,9 +168,9 @@ export function drawDisplay(
   height: number
 ): void {
   ctx.save();
-  ctx.fillStyle = 'rgba(179, 157, 219, 0.35)';
-  ctx.strokeStyle = '#b39ddb';
-  ctx.lineWidth = 2;
+  ctx.fillStyle = 'rgba(179, 157, 219, 0.15)';
+  ctx.strokeStyle = 'rgba(179, 157, 219, 0.45)';
+  ctx.lineWidth = 1.5;
   ctx.fillRect(x, y, width, height);
   ctx.strokeRect(x, y, width, height);
   ctx.restore();
