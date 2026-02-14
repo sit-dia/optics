@@ -4,8 +4,7 @@ An interactive thin-lens optics simulator for VR/AR education. Built for the Des
 
 [![Live Demo](https://img.shields.io/badge/Live_Demo-optics.diaversity.org-blue?style=for-the-badge&logo=googlechrome&logoColor=white)](https://optics.diaversity.org)
 
-https://github.com/user-attachments/assets/c929351c-bfd8-407a-84f6-7d799056079c
-
+https://github.com/user-attachments/assets/6687d377-7964-4c38-8447-7724efb41ccb
 
 ## Features
 
