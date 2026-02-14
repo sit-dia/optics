@@ -368,7 +368,7 @@ export function drawEdgeGlow(
   canvasH: number,
   opts: { intensity?: number; color?: [number, number, number] } = {}
 ): void {
-  const intensity = opts.intensity ?? 0.2;
+  const intensity = opts.intensity ?? 0.18;
   // Default color is a neutral warm tone; callers pass specific RGB for virtual/real
   const [r, g, b] = opts.color ?? [255, 60, 60];
   const glowW = 36; // gradient strip width in pixels
