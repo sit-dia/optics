@@ -366,9 +366,11 @@ export function drawEdgeGlow(
   side: 'left' | 'right' | 'top' | 'bottom',
   canvasW: number,
   canvasH: number,
-  opts: { intensity?: number } = {}
+  opts: { intensity?: number; color?: [number, number, number] } = {}
 ): void {
-  const intensity = opts.intensity ?? 0.4;
+  const intensity = opts.intensity ?? 0.2;
+  // Default color is a neutral warm tone; callers pass specific RGB for virtual/real
+  const [r, g, b] = opts.color ?? [255, 60, 60];
   const glowW = 36; // gradient strip width in pixels
   ctx.save();
   let gradient: CanvasGradient;
@@ -376,29 +378,29 @@ export function drawEdgeGlow(
   switch (side) {
     case 'left':
       gradient = ctx.createLinearGradient(0, 0, glowW, 0);
-      gradient.addColorStop(0, `rgba(255, 60, 60, ${intensity})`);
-      gradient.addColorStop(1, 'rgba(255, 60, 60, 0.0)');
+      gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${intensity})`);
+      gradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0.0)`);
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, glowW, canvasH);
       break;
     case 'right':
       gradient = ctx.createLinearGradient(canvasW, 0, canvasW - glowW, 0);
-      gradient.addColorStop(0, `rgba(255, 60, 60, ${intensity})`);
-      gradient.addColorStop(1, 'rgba(255, 60, 60, 0.0)');
+      gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${intensity})`);
+      gradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0.0)`);
       ctx.fillStyle = gradient;
       ctx.fillRect(canvasW - glowW, 0, glowW, canvasH);
       break;
     case 'top':
       gradient = ctx.createLinearGradient(0, 0, 0, glowW);
-      gradient.addColorStop(0, `rgba(255, 60, 60, ${intensity})`);
-      gradient.addColorStop(1, 'rgba(255, 60, 60, 0.0)');
+      gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${intensity})`);
+      gradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0.0)`);
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, canvasW, glowW);
       break;
     case 'bottom':
       gradient = ctx.createLinearGradient(0, canvasH, 0, canvasH - glowW);
-      gradient.addColorStop(0, `rgba(255, 60, 60, ${intensity})`);
-      gradient.addColorStop(1, 'rgba(255, 60, 60, 0.0)');
+      gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${intensity})`);
+      gradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0.0)`);
       ctx.fillStyle = gradient;
       ctx.fillRect(0, canvasH - glowW, canvasW, glowW);
       break;

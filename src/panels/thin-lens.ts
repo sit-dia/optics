@@ -29,18 +29,22 @@ interface LabelRect {
 
 class LabelPlacer {
   private placed: LabelRect[] = [];
+  private displacements: Array<{ origX: number; origY: number; finalX: number; finalY: number }> = [];
 
   /** Register a label and return adjusted (x,y) that avoids collisions. */
   place(x: number, y: number, w: number, h: number): { x: number; y: number } {
     const candidate: LabelRect = { x: x - w / 2, y: y - h / 2, w, h };
     let bestX = candidate.x;
     let bestY = candidate.y;
+    let displaced = false;
     // Try shifts: original, then progressively further up/down/left/right
     const shifts = [
       [0, 0], [0, -h - 2], [0, h + 2],
       [-w - 4, 0], [w + 4, 0],
       [0, -h * 2 - 4], [0, h * 2 + 4],
       [-w - 4, -h - 2], [w + 4, -h - 2],
+      [-w * 2 - 8, 0], [w * 2 + 8, 0],
+      [0, -h * 3 - 6], [0, h * 3 + 6],
     ];
     for (const [dx, dy] of shifts) {
       const cx = candidate.x + dx;
@@ -60,11 +64,40 @@ class LabelPlacer {
       if (!overlap) {
         bestX = cx;
         bestY = cy;
+        displaced = dx !== 0 || dy !== 0;
         break;
       }
     }
     this.placed.push({ x: bestX, y: bestY, w, h });
-    return { x: bestX + w / 2, y: bestY + h / 2 };
+    const finalX = bestX + w / 2;
+    const finalY = bestY + h / 2;
+    if (displaced) {
+      this.displacements.push({ origX: x, origY: y, finalX, finalY });
+    }
+    return { x: finalX, y: finalY };
+  }
+
+  /** Draw leader lines from original positions to displaced label positions. */
+  drawLeaderLines(ctx: CanvasRenderingContext2D): void {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    for (const d of this.displacements) {
+      const dist = Math.hypot(d.finalX - d.origX, d.finalY - d.origY);
+      if (dist > 8) {
+        ctx.beginPath();
+        ctx.moveTo(d.origX, d.origY);
+        ctx.lineTo(d.finalX, d.finalY);
+        ctx.stroke();
+        // Small dot at origin
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.beginPath();
+        ctx.arc(d.origX, d.origY, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
   }
 }
 
@@ -637,10 +670,13 @@ export class ThinLensPanel extends BasePanel {
             : 'rgba(255, 255, 255, 0.08)',
     });
 
-    // --- Red glow edge indicators for off-screen content ---
+    // --- Color-matched glow edge indicators for off-screen content ---
+    // Purple/magenta for virtual image (HMD regime), green for real image (Projector regime)
+    const virtualGlowColor: [number, number, number] = [168, 85, 247]; // purple
+    const realGlowColor: [number, number, number] = [76, 175, 80]; // green
     if (imgType !== 'infinity') {
       if (imageOffScreenLeft) {
-        drawEdgeGlow(ctx, 'left', this.width, this.height);
+        drawEdgeGlow(ctx, 'left', this.width, this.height, { color: virtualGlowColor });
         const dist = Math.abs(diRaw).toFixed(0);
         drawEdgeLabel(ctx, 'left', this.width, this.height,
           '\u2190 Virtual Image ' + dist + 'mm',
@@ -648,7 +684,7 @@ export class ThinLensPanel extends BasePanel {
         );
       }
       if (imageOffScreenRight) {
-        drawEdgeGlow(ctx, 'right', this.width, this.height);
+        drawEdgeGlow(ctx, 'right', this.width, this.height, { color: realGlowColor });
         const dist = diRaw.toFixed(0);
         drawEdgeLabel(ctx, 'right', this.width, this.height,
           'Real Image ' + dist + 'mm \u2192',
@@ -656,12 +692,18 @@ export class ThinLensPanel extends BasePanel {
         );
       }
       if (imageOffScreenTop) {
-        drawEdgeGlow(ctx, 'top', this.width, this.height);
+        // Use regime-appropriate color for top/bottom glow
+        const topBottomColor = doDistance < f ? virtualGlowColor : realGlowColor;
+        drawEdgeGlow(ctx, 'top', this.width, this.height, { color: topBottomColor });
       }
       if (imageOffScreenBottom) {
-        drawEdgeGlow(ctx, 'bottom', this.width, this.height);
+        const topBottomColor = doDistance < f ? virtualGlowColor : realGlowColor;
+        drawEdgeGlow(ctx, 'bottom', this.width, this.height, { color: topBottomColor });
       }
     }
+
+    // --- Draw leader lines for displaced labels ---
+    labels.drawLeaderLines(ctx);
 
     // --- Equation on-canvas at bottom ---
     const eqText = `1/f = 1/d_o + 1/d_i  \u2192  1/${f} = 1/${doDistance} + 1/${diText}`;
